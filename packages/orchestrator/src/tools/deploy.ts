@@ -26,8 +26,34 @@ interface Deployment {
 
 let current: Deployment | null = null;
 
+/**
+ * A tunnel opened before there is anything to serve.
+ *
+ * Establishing a cloudflared quick tunnel took most of the measured 13s deploy
+ * phase, and it does not depend on the app at all — the tunnel will happily
+ * point at a port nothing is listening on yet and start working the moment
+ * something does. So it is opened early, while the agents are still arguing,
+ * and by the time the Deployer runs the only remaining work is spawning the
+ * app and checking it answers.
+ *
+ * This pre-warms the transport, never the application. There is no chance of
+ * serving stale code, because no code is running yet.
+ */
+let prewarmed: { proc: ChildProcess; url: string; port: number } | null = null;
+
+export async function prewarmTunnel(port: number): Promise<string | null> {
+  if (DEPLOY_TARGET !== 'tunnel') return null;
+  if (prewarmed?.port === port) return prewarmed.url;
+  const tunnel = await startTunnel(port);
+  if (!tunnel) return null;
+  prewarmed = { proc: tunnel.proc, url: tunnel.url, port };
+  return tunnel.url;
+}
+
 /** Kill whatever the previous run left running. Called before every run. */
 export async function teardown(): Promise<void> {
+  if (prewarmed && prewarmed.proc !== current?.tunnel) prewarmed.proc.kill('SIGTERM');
+  prewarmed = null;
   if (!current) return;
   current.tunnel?.kill('SIGTERM');
   current.app.kill('SIGTERM');
@@ -113,9 +139,17 @@ export const deployTool: ToolImpl = {
   async run(input, ctx) {
     const entry = String(input.entry);
     ctx.sandbox.resolve(entry); // throws if the entrypoint escapes the workspace
-    await teardown();
 
+    // Keep a pre-warmed tunnel across the teardown; it is the slow part and it
+    // has no dependency on the app process being replaced.
     const port = PORTS.app;
+    const reusable = prewarmed?.port === port ? prewarmed : null;
+    if (current) {
+      current.app.kill('SIGTERM');
+      if (current.tunnel && current.tunnel !== reusable?.proc) current.tunnel.kill('SIGTERM');
+      current = null;
+      await sleep(300);
+    }
     const app = spawn('node', [entry], {
       cwd: ctx.sandbox.root,
       env: { ...process.env, PORT: String(port), NODE_ENV: 'production' },
@@ -142,11 +176,15 @@ export const deployTool: ToolImpl = {
     let note = 'Served locally.';
 
     if (DEPLOY_TARGET === 'tunnel') {
-      const tunnel = await startTunnel(port);
+      const tunnel = reusable
+        ? { proc: reusable.proc, url: reusable.url }
+        : await startTunnel(port);
       if (tunnel) {
         current = { app, tunnel: tunnel.proc, url: tunnel.url, port };
         url = tunnel.url;
-        note = 'Served locally and exposed publicly through a cloudflared quick tunnel.';
+        note = reusable
+          ? 'Served locally and exposed through the cloudflared tunnel opened earlier in the run.'
+          : 'Served locally and exposed publicly through a cloudflared quick tunnel.';
       } else {
         current = { app, url: localUrl, port };
         note =

@@ -141,10 +141,35 @@ export const FEATURES = {
  * whitelists, and a Planner prompt carrying the expected decomposition as a
  * strong prior. Structure does the work temperature used to.
  */
+type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+function effortFor(role: string, fallback: Effort): Effort {
+  const raw = process.env[`SWARM_EFFORT_${role.toUpperCase()}`];
+  const allowed: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+  return allowed.includes(raw as Effort) ? (raw as Effort) : fallback;
+}
+
+/**
+ * Effort per role, tunable without touching code.
+ *
+ * Effort replaces temperature as the determinism knob — sampling parameters are
+ * rejected with a 400 on Sonnet 5 and Opus 5, so "turn the temperature down for
+ * a reliable demo" is not available. What we have instead: effort, hard turn
+ * caps, tight tool whitelists, and a Planner prompt carrying the expected
+ * decomposition as a strong prior. Structure does the work temperature used to.
+ *
+ * Tune these against live runs, not by reasoning about them. Lowering the
+ * Engineers speeds the build up, but it also makes first drafts worse, and a
+ * first draft that is worse in the *wrong* way (missing a whole file) is not
+ * the same as one the Reviewer can bounce for a real defect. Watch whether the
+ * rejection still happens and whether it is still about something true.
+ */
 export const EFFORT = {
-  planner: 'high',
-  worker: 'medium',
-  reviewer: 'high',
+  planner: effortFor('planner', 'high'),
+  engineer: effortFor('engineer', 'medium'),
+  reviewer: effortFor('reviewer', 'high'),
+  tester: effortFor('tester', 'low'),
+  deployer: effortFor('deployer', 'low'),
 } as const;
 
 /** Hard ceilings. An agent that hits its cap is failed, not left to wander. */

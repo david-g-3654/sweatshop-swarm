@@ -88,8 +88,13 @@ and fair. You block work that is not production-ready.
 
 ${WORKSPACE_RULES}
 
-Read the code with read_file and list_files before judging anything. You may run
-run_tests. You never write files — you report, the engineers fix.
+Every file in the workspace, and the real output of the test suite, are given to
+you in your first message. You do not need to go and fetch them, and you should
+not: re-reading what you already have wastes the team's time. read_file exists
+only if you genuinely need to check something that was not included.
+
+You never write files and you never run the suite yourself — the pipeline runs
+it and hands you the result. You report; the engineers fix.
 
 Your rubric. A change fails review if any of these is true:
 1. User input reaches logic without validation (missing, wrong type, empty
@@ -138,13 +143,17 @@ You are the Deployer. You ship what the team built.
 
 ${WORKSPACE_RULES}
 
+The workspace listing is already in your first message, so you know what exists
+and how the server starts without going to look.
+
 Your job, in order:
-1. list_files and read the server entrypoint so you know how it starts and
-   which environment variable sets its port.
-2. Call deploy with the entrypoint path. That starts the app and returns a URL.
-3. Verify the URL is actually serving by calling http_check on it. A deploy that
+1. Call deploy with the entrypoint path. That starts the app and returns a URL.
+2. Verify the URL is actually serving by calling http_check on it. A deploy that
    returns a URL nobody checked is not a deploy.
-4. Report the URL plainly on its own line.
+3. Report the URL plainly on its own line.
+
+Do not read files first unless the listing genuinely does not tell you which
+file starts the server.
 
 If deploy fails, read the error, fix nothing yourself, and report what went
 wrong. You never edit application code.
@@ -172,7 +181,7 @@ export function specs(): Record<string, AgentSpec> {
       role: 'engineer',
       label: 'Engineer A',
       model: MODELS.worker,
-      effort: EFFORT.worker,
+      effort: EFFORT.engineer,
       system: ENGINEER_SYSTEM,
       tools: ['write_file', 'read_file', 'list_files', 'run_command', 'run_tests'],
     },
@@ -181,7 +190,7 @@ export function specs(): Record<string, AgentSpec> {
       role: 'engineer',
       label: 'Engineer B',
       model: MODELS.worker,
-      effort: EFFORT.worker,
+      effort: EFFORT.engineer,
       system: ENGINEER_SYSTEM,
       tools: ['write_file', 'read_file', 'list_files', 'run_command', 'run_tests'],
     },
@@ -192,15 +201,18 @@ export function specs(): Record<string, AgentSpec> {
       model: MODELS.worker,
       effort: EFFORT.reviewer,
       system: REVIEWER_SYSTEM,
-      tools: ['read_file', 'list_files', 'run_tests'],
-      maxTurns: 10,
+      // No run_tests: the pipeline runs the suite and injects the real output,
+      // so the verdict rests on a tool result rather than an agent's account of
+      // one. read_file stays as an escape hatch it should rarely need.
+      tools: ['read_file'],
+      maxTurns: 8,
     },
     tester: {
       agentId: 'tester',
       role: 'tester',
       label: 'Tester',
       model: MODELS.worker,
-      effort: EFFORT.worker,
+      effort: EFFORT.tester,
       system: TESTER_SYSTEM,
       tools: ['run_tests', 'read_file', 'list_files'],
       maxTurns: 6,
@@ -210,10 +222,10 @@ export function specs(): Record<string, AgentSpec> {
       role: 'deployer',
       label: 'Deployer',
       model: MODELS.worker,
-      effort: EFFORT.worker,
+      effort: EFFORT.deployer,
       system: DEPLOYER_SYSTEM,
-      tools: ['list_files', 'read_file', 'deploy', 'http_check'],
-      maxTurns: 8,
+      tools: ['read_file', 'deploy', 'http_check'],
+      maxTurns: 6,
     },
   };
 }

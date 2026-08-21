@@ -2,10 +2,13 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Phase } from '@swarm/shared';
 import { SANDBOX_ROOT, LIMITS } from './config.js';
+import { randomUUID as uuid } from 'node:crypto';
 import { EventBus } from './bus.js';
 import { Agent, isFatalConfig, describeError } from './agent.js';
 import { Sandbox } from './tools/index.js';
-import { teardown } from './tools/deploy.js';
+import { teardown, prewarmTunnel } from './tools/deploy.js';
+import { executeToolWithEvents } from './tools/execute.js';
+import { PORTS } from './config.js';
 import { specs, parsePlan, verdictOf, suiteOf, shippedUrl, type Plan } from './roles.js';
 import { UsageMeter } from './usage.js';
 
@@ -134,6 +137,64 @@ export class Orchestrator {
     return { ok, runId: this.bus.runId, summary, ...(deployUrl ? { deployUrl } : {}) };
   }
 
+  /**
+   * Read the whole workspace into a single message.
+   *
+   * Measured: review round one took 102 of the run's 357 seconds, and the
+   * Reviewer spent ten of its twelve tool calls just discovering and reading
+   * files. Those are turns spent on I/O the orchestrator can do in parallel in
+   * milliseconds, so it does — the Reviewer's first message already contains
+   * everything it would have gone looking for.
+   *
+   * The extra input tokens are cheap and largely cached; the round trips were
+   * not.
+   */
+  private async workspaceListing(): Promise<string> {
+    const files = await this.sandbox.listFiles();
+    if (files.length === 0) return '(the workspace is empty — the engineers wrote nothing)';
+
+    const contents = await Promise.all(
+      files.map(async (file) => {
+        try {
+          return { file, body: await this.sandbox.readFile(file) };
+        } catch (err) {
+          return { file, body: `(could not be read: ${err instanceof Error ? err.message : String(err)})` };
+        }
+      }),
+    );
+
+    return contents
+      .map(({ file, body }) => `--- ${file} ---\n\`\`\`\n${body}\n\`\`\``)
+      .join('\n\n');
+  }
+
+  /**
+   * Run the suite ourselves and hand the Reviewer the result.
+   *
+   * The Reviewer used to run it too, which cost turns and, worse, made the
+   * verdict depend on an agent reporting its own tool output. Running it here
+   * keeps the existing rule — the tool result is the truth, never an agent's
+   * claim about it — and takes the re-run off the critical path.
+   */
+  private async authoritativeTests(): Promise<string> {
+    const result = await executeToolWithEvents(
+      this.bus,
+      'tester',
+      this.sandbox,
+      'run_tests',
+      {},
+      uuid(),
+    );
+    const outcome = result.tests;
+    if (!outcome) return 'The suite could not be run.';
+    return [
+      `The suite has already been run for you by the pipeline. This is the real output, not a claim:`,
+      `  ${outcome.passed} passing, ${outcome.failed} failing (${outcome.ok ? 'GREEN' : 'RED'})`,
+      '',
+      outcome.output,
+    ].join('\n');
+  }
+
   // ---- phases -------------------------------------------------------------
 
   private async plan(goal: string): Promise<Plan> {
@@ -181,6 +242,11 @@ export class Orchestrator {
     this.phase('building');
     this.bus.drama('info', 'Engineer A and Engineer B are writing code in parallel.');
 
+    // Open the tunnel now, while there are minutes of agent work still to come.
+    // Establishing it was most of the deploy phase and it needs nothing from
+    // the app, so it has no business sitting on the critical path at the end.
+    void prewarmTunnel(PORTS.app);
+
     // Genuinely concurrent: two independent loops, two independent token
     // streams. This is the part of the graph the audience watches light up.
     await Promise.all(
@@ -202,10 +268,30 @@ export class Orchestrator {
     for (let round = 1; round <= LIMITS.maxReviewRounds; round++) {
       this.bus.drama('info', `Review round ${round}.`, 'reviewer');
 
-      const prompt =
+      // Everything the Reviewer needs, gathered in parallel before it thinks.
+      const [listing, tests] = await Promise.all([this.workspaceListing(), this.authoritativeTests()]);
+
+      const header =
         round === 1
-          ? `Review the work in the workspace against your rubric.\n\nWhat the team set out to build:\n${plan.summary}\n\nAcceptance criteria:\n${plan.acceptance.map((a) => `- ${a}`).join('\n')}`
-          : 'The engineers say they have addressed your findings. Re-read the files and review again.';
+          ? [
+              'Review the work in the workspace against your rubric.',
+              '',
+              `What the team set out to build:\n${plan.summary}`,
+              '',
+              `Acceptance criteria:\n${plan.acceptance.map((a) => `- ${a}`).join('\n')}`,
+            ].join('\n')
+          : 'The engineers say they have addressed your findings. Here is the workspace as it stands now.';
+
+      const prompt = [
+        header,
+        '',
+        tests,
+        '',
+        'THE COMPLETE WORKSPACE:',
+        listing,
+        '',
+        'You have everything above already — do not re-read these files. Judge them.',
+      ].join('\n');
 
       const result = await this.agent('reviewer').run(prompt);
       const verdict = verdictOf(result.text);
@@ -275,8 +361,16 @@ export class Orchestrator {
     this.phase('deploying');
     this.bus.emit({ type: 'deploy.started', agentId: 'deployer', target: 'app' });
 
+    const listing = await this.workspaceListing();
     const result = await this.agent('deployer').run(
-      `The suite is green and the Reviewer approved. Ship it.\n\nThe goal was: ${goal}`,
+      [
+        'The suite is green and the Reviewer approved. Ship it.',
+        '',
+        `The goal was: ${goal}`,
+        '',
+        'THE COMPLETE WORKSPACE:',
+        listing,
+      ].join('\n'),
     );
     const url = shippedUrl(result.text);
 

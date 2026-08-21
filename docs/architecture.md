@@ -207,6 +207,45 @@ Credentials are also shape-checked at startup, and a key that cannot be sent as
 an HTTP header aborts the run immediately instead of failing identically for
 each of six agents.
 
+## Latency
+
+Measured on a full live run, so the targets were chosen from data rather than
+from where the time felt like it was going:
+
+| Phase | Time | Turns |
+|---|---|---|
+| Planning | 55s | planner 1 |
+| Building | 116s | engineer-a 9, engineer-b 10 (parallel) |
+| Review | 167s | reviewer 7, engineers 9 |
+| Testing | 5s | tester 2 |
+| Deploying | 13s | deployer 5 |
+
+Review splits further: **round one alone was 102s**, engineer fixes 50s, round
+two 15s. And the Reviewer spent ten of its twelve tool calls discovering and
+reading files — turns burned on I/O the orchestrator can do in parallel in
+milliseconds.
+
+So three things came off the critical path:
+
+- **The Reviewer is front-loaded.** Every file, with contents, is in its first
+  message. It has no `list_files` at all, and `read_file` only as an escape
+  hatch it should rarely need.
+- **The pipeline runs the suite and injects the real output.** The Reviewer no
+  longer runs tests itself. This also tightens the existing rule that a verdict
+  rests on a tool result rather than an agent's account of one.
+- **The tunnel is pre-warmed.** Establishing a cloudflared quick tunnel was most
+  of the deploy phase and depends on nothing the app does, so it is opened when
+  the build starts, minutes ahead of when it is needed. Only the transport is
+  pre-warmed, never the application, so stale code cannot be served.
+
+The Deployer got the same front-loading treatment for the same reason: it was
+spending three turns reading files to learn something the orchestrator already
+knew.
+
+What was deliberately *not* done: cutting review rounds, or weakening the hidden
+rubric to make approvals faster. A four-minute run with a real rejection is a
+better demo than a two-minute run that rubber-stamps.
+
 ## The sandbox
 
 Agents get a directory and an allowlist. Paths that escape the root are
