@@ -1,4 +1,4 @@
-import { MODELS, EFFORT } from './config.js';
+import { MODELS, EFFORT, LIMITS } from './config.js';
 import type { AgentSpec } from './agent.js';
 
 /**
@@ -175,6 +175,7 @@ export function specs(): Record<string, AgentSpec> {
       system: PLANNER_SYSTEM,
       tools: [],
       maxTurns: 2,
+      maxTokens: 8000,
     },
     'engineer-a': {
       agentId: 'engineer-a',
@@ -184,6 +185,7 @@ export function specs(): Record<string, AgentSpec> {
       effort: EFFORT.engineer,
       system: ENGINEER_SYSTEM,
       tools: ['write_file', 'read_file', 'list_files', 'run_command', 'run_tests'],
+      maxTurns: LIMITS.maxTurnsPerEngineer,
     },
     'engineer-b': {
       agentId: 'engineer-b',
@@ -193,6 +195,7 @@ export function specs(): Record<string, AgentSpec> {
       effort: EFFORT.engineer,
       system: ENGINEER_SYSTEM,
       tools: ['write_file', 'read_file', 'list_files', 'run_command', 'run_tests'],
+      maxTurns: LIMITS.maxTurnsPerEngineer,
     },
     reviewer: {
       agentId: 'reviewer',
@@ -206,6 +209,8 @@ export function specs(): Record<string, AgentSpec> {
       // one. read_file stays as an escape hatch it should rarely need.
       tools: ['read_file'],
       maxTurns: 8,
+      // Findings run long and that is the point; this only bounds a runaway.
+      maxTokens: 12000,
     },
     tester: {
       agentId: 'tester',
@@ -216,6 +221,8 @@ export function specs(): Record<string, AgentSpec> {
       system: TESTER_SYSTEM,
       tools: ['run_tests', 'read_file', 'list_files'],
       maxTurns: 6,
+      // Reports a pass/fail line. Anything longer is the model padding.
+      maxTokens: 2000,
     },
     deployer: {
       agentId: 'deployer',
@@ -226,6 +233,7 @@ export function specs(): Record<string, AgentSpec> {
       system: DEPLOYER_SYSTEM,
       tools: ['read_file', 'deploy', 'http_check'],
       maxTurns: 6,
+      maxTokens: 2000,
     },
   };
 }

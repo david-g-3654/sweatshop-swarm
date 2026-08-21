@@ -242,6 +242,27 @@ The Deployer got the same front-loading treatment for the same reason: it was
 spending three turns reading files to learn something the orchestrator already
 knew.
 
+### What it bought, measured
+
+| | before | after |
+|---|---|---|
+| Reviewer turns | 7 | **2** |
+| Reviewer tool calls | 12 (1 list, 9 read, 2 test) | **0** |
+| Review round 1 | 102s | **60s** |
+| Deployer turns | 5 | **3** |
+| Deploy phase | 13s | 9s |
+| Whole run | 357s | 314s |
+
+Read the top four rows, not the last one. The turn and tool-call reductions are
+structural — they happen every run. The 43s on the total is inside normal
+run-to-run variance: another run of the same goal took 224s.
+
+The review *phase* barely moved (167s → 165s) even though round one lost 42s,
+because a third of that phase is Engineers fixing, and in the measured run one
+of them had been cut off at its turn cap and had more to repair. Speeding up
+one participant in a phase does not speed up the phase if another absorbs the
+slack.
+
 What was deliberately *not* done: cutting review rounds, or weakening the hidden
 rubric to make approvals faster. A four-minute run with a real rejection is a
 better demo than a two-minute run that rubber-stamps.

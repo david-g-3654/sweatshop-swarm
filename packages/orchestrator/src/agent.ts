@@ -19,6 +19,8 @@ export interface AgentSpec {
   /** Tool whitelist. An agent literally cannot call anything outside it. */
   tools: readonly string[];
   maxTurns?: number;
+  /** Ceiling on one reply. A cap, not a target — it bounds a rambler. */
+  maxTokens?: number;
 }
 
 export interface AgentResult {
@@ -197,6 +199,7 @@ export class Agent {
         messages: this.messages,
         tools,
         effort: this.spec.effort,
+        ...(this.spec.maxTokens ? { maxTokens: this.spec.maxTokens } : {}),
       }),
     );
 

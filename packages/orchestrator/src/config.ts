@@ -175,6 +175,19 @@ export const EFFORT = {
 /** Hard ceilings. An agent that hits its cap is failed, not left to wander. */
 export const LIMITS = {
   maxTurnsPerAgent: Number(process.env.SWARM_MAX_TURNS ?? 14),
+  /**
+   * Engineers get a bigger budget than everyone else.
+   *
+   * Observed: an engineer hit the 14-turn cap mid-build and submitted an
+   * unfinished workstream. The Reviewer duly rejected it — for a missing file.
+   * That is a correct verdict and a poor demo: the rejection should be a real
+   * defect in finished work, not the wreckage of a truncated turn budget.
+   *
+   * Writing several files, running the suite and fixing what it says genuinely
+   * takes turns. The cap is a runaway guard, and it was set below the honest
+   * cost of the job.
+   */
+  maxTurnsPerEngineer: Number(process.env.SWARM_MAX_TURNS_ENGINEER ?? 20),
   maxReviewRounds: Number(process.env.SWARM_MAX_REVIEW_ROUNDS ?? 3),
   commandTimeoutMs: Number(process.env.SWARM_CMD_TIMEOUT_MS ?? 90_000),
   maxToolResultChars: 12_000,
