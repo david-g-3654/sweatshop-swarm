@@ -13,7 +13,8 @@
     "rehearse": "npm --workspace @arena/orchestrator run rehearse",
     "server": "npm --workspace @arena/orchestrator run start",
     "test": "npm --workspace @arena/orchestrator run test",
-    "probe": "npm --workspace @arena/orchestrator run probe"
+    "probe": "npm --workspace @arena/orchestrator run probe",
+    "arena": "npm --workspace @arena/orchestrator run arena --"
   },
   "engines": {
     "node": ">=20"

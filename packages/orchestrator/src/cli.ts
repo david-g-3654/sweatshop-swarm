@@ -11,9 +11,22 @@ import * as recorder from './recorder.js';
  */
 
 const args = process.argv.slice(2);
+
+/**
+ * Read a flag's value, joining every word up to the next flag.
+ *
+ * `npm run arena -- --goal "a b c"` loses the quoting on its way through npm,
+ * so the goal arrives as separate argv entries. Taking only args[i+1] would
+ * silently run with the goal "a".
+ */
 function flag(name: string, fallback: string): string {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1]! : fallback;
+  const start = args.indexOf(`--${name}`);
+  if (start < 0) return fallback;
+  const words: string[] = [];
+  for (let i = start + 1; i < args.length && !args[i]!.startsWith('--'); i++) {
+    words.push(args[i]!);
+  }
+  return words.length ? words.join(' ') : fallback;
 }
 
 const goal = flag('goal', 'Build and deploy a working URL shortener with click analytics.');
