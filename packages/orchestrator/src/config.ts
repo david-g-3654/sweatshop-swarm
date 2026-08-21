@@ -48,6 +48,15 @@ export const PORTS = {
   app: Number(process.env.ARENA_APP_PORT ?? 4310),
 } as const;
 
+/**
+ * Multiplier on every scripted pause in rehearsal mode.
+ *
+ * At 1 the whole run finishes in about nine seconds, which is great for
+ * iterating and useless on stage — nobody can read it. 2.5 puts a full run at
+ * roughly half a minute, which is the pace you can actually narrate over.
+ */
+export const REHEARSAL_SPEED = Number(process.env.ARENA_REHEARSAL_SPEED ?? 2.5);
+
 export const DEPLOY_TARGET = (process.env.ARENA_DEPLOY_TARGET ?? 'tunnel') as
   | 'tunnel'
   | 'local'

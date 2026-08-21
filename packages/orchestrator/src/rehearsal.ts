@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Phase } from '@arena/shared';
-import { REPO_ROOT, SANDBOX_ROOT } from './config.js';
+import { REPO_ROOT, SANDBOX_ROOT, REHEARSAL_SPEED } from './config.js';
 import { EventBus } from './bus.js';
 import { Sandbox } from './tools/index.js';
 import { executeToolWithEvents } from './tools/execute.js';
@@ -106,7 +106,7 @@ export class Rehearsal {
   /** Multiplier on every scripted pause. Lower is faster. */
   constructor(
     readonly goal: string,
-    private readonly speed = 1,
+    private readonly speed = REHEARSAL_SPEED,
   ) {
     const runId = `rehearsal-${Date.now().toString(36)}-${randomUUID().slice(0, 4)}`;
     this.bus = new EventBus(runId, goal);
