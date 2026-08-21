@@ -3,11 +3,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Phase } from '@swarm/shared';
-import { REPO_ROOT, SANDBOX_ROOT, REHEARSAL_SPEED } from './config.js';
+import { REPO_ROOT, SANDBOX_ROOT, REHEARSAL_SPEED, PORTS } from './config.js';
 import { EventBus } from './bus.js';
 import { Sandbox } from './tools/index.js';
 import { executeToolWithEvents } from './tools/execute.js';
-import { teardown } from './tools/deploy.js';
+import { teardown, prewarmTunnel } from './tools/deploy.js';
 import { specs } from './roles.js';
 
 /**
@@ -192,6 +192,10 @@ export class Rehearsal {
 
     // --- build (genuinely concurrent, like the real thing) ---
     this.phase('building');
+    // Same as a live run: open the tunnel while there is still work to do, so
+    // establishing it is not sitting on the critical path at the end. A quick
+    // tunnel needs several seconds before its hostname routes anywhere.
+    void prewarmTunnel(PORTS.app);
     this.bus.drama('info', 'Engineer A and Engineer B are writing code in parallel.');
     await Promise.all([
       (async () => {

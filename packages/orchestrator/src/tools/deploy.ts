@@ -41,12 +41,39 @@ let current: Deployment | null = null;
  */
 let prewarmed: { proc: ChildProcess; url: string; port: number } | null = null;
 
+/**
+ * Is this tunnel hostname still real?
+ *
+ * A quick tunnel can disappear without the local cloudflared process noticing
+ * in any way we can see — the machine sleeps, the network blips, the edge drops
+ * it. The hostname then stops resolving while our cached copy of it looks
+ * perfectly fine. Any HTTP answer counts as alive, including a 502 from the
+ * edge when the origin is not up yet, because that still proves the hostname
+ * routes somewhere.
+ */
+async function tunnelAlive(url: string): Promise<boolean> {
+  return (await probe(url, 8000)).ok;
+}
+
 export async function prewarmTunnel(port: number): Promise<string | null> {
   if (DEPLOY_TARGET !== 'tunnel') return null;
-  if (prewarmed?.port === port) return prewarmed.url;
+
+  if (prewarmed?.port === port) {
+    if (await tunnelAlive(prewarmed.url)) return prewarmed.url;
+    // Cached but dead. This is how a booth ends up showing a QR code and a
+    // link that both go nowhere while the app itself is running fine.
+    console.warn('[swarm] the existing tunnel stopped resolving — opening a new one');
+    prewarmed.proc.kill('SIGTERM');
+    prewarmed = null;
+  }
+
   const tunnel = await startTunnel(port);
   if (!tunnel) return null;
   prewarmed = { proc: tunnel.proc, url: tunnel.url, port };
+  // If cloudflared dies, forget its hostname rather than handing it out again.
+  tunnel.proc.on('exit', () => {
+    if (prewarmed?.proc === tunnel.proc) prewarmed = null;
+  });
   return tunnel.url;
 }
 
@@ -95,43 +122,141 @@ async function probe(url: string, timeoutMs = 2000): Promise<{ ok: boolean; stat
   }
 }
 
-async function waitForServer(url: string, attempts = 40): Promise<boolean> {
+/**
+ * Poll a URL until something answers.
+ *
+ * The per-attempt timeout matters more than it looks. A local process either
+ * answers in milliseconds or is not listening, so one second is plenty. A
+ * tunnel hostname has to resolve through DNS that may not have propagated and
+ * then reach a Cloudflare edge — one second times out every single attempt, and
+ * the caller concludes the tunnel is dead when it is merely cold. That is
+ * exactly what made working tunnels look broken.
+ */
+async function waitForServer(
+  url: string,
+  attempts = 40,
+  { timeoutMs = 1000, gapMs = 400 }: { timeoutMs?: number; gapMs?: number } = {},
+): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    if ((await probe(url, 1000)).ok) return true;
-    await sleep(400);
+    if ((await probe(url, timeoutMs)).ok) return true;
+    await sleep(gapMs);
   }
   return false;
 }
 
-/** Start a cloudflared quick tunnel and pull the public URL out of its output. */
+/**
+ * Does this URL actually reach the application, rather than a Cloudflare error?
+ *
+ * Deliberately stricter than `waitForServer`, which accepts any HTTP answer —
+ * that is the right test for "does this hostname route", and the wrong one for
+ * "is this a link I can put on a projector".
+ */
+async function reachesApp(url: string, attempts = 10): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    const result = await probe(url, 6000);
+    if (result.ok && (result.status ?? 500) < 500) return true;
+    await sleep(1500);
+  }
+  return false;
+}
+
+/** Remote URLs need patience: DNS propagation plus a cold edge. */
+const TUNNEL_WAIT = { timeoutMs: 6000, gapMs: 1500 } as const;
+
+/**
+ * Start a cloudflared quick tunnel and return a hostname that actually routes.
+ *
+ * cloudflared prints the hostname before the tunnel is usable — the URL appears
+ * in its output, and only a second or so later does it log "Registered tunnel
+ * connection", after which DNS still has to catch up. Taking the URL at face
+ * value the moment it is printed is how you end up publishing a QR code and an
+ * iframe that both point at a hostname which does not yet resolve.
+ *
+ * So: read the hostname, then poll it until something answers. A 502 from the
+ * Cloudflare edge counts — it means the hostname routes and the origin simply
+ * is not up yet, which at pre-warm time is exactly the expected state.
+ */
 async function startTunnel(port: number): Promise<{ proc: ChildProcess; url: string } | null> {
   const proc = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate'], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  const url = await new Promise<string | null>((resolve) => {
+  // Keep the tail of its output so a failure can be explained rather than guessed at.
+  const log: string[] = [];
+
+  /**
+   * Wait for cloudflared to say the tunnel is connected, not merely named.
+   *
+   * This must happen before the first HTTP probe. Probing a hostname that does
+   * not resolve yet gets ENOTFOUND, and Node's fetch caches that negative
+   * lookup for the life of the process — so one early probe poisons every
+   * later one and a perfectly healthy tunnel looks permanently dead. That is
+   * what made every in-run tunnel fail while the same tunnel probed by hand a
+   * few seconds later worked fine.
+   *
+   * cloudflared logs "Registered tunnel connection" about a second after it
+   * prints the hostname. Waiting for that, plus a moment for DNS, means the
+   * first probe has something to find.
+   */
+  const ready = await new Promise<{ url: string } | null>((resolve) => {
     let settled = false;
-    const finish = (value: string | null) => {
+    let url: string | null = null;
+    let registered = false;
+
+    const finish = (value: { url: string } | null) => {
       if (settled) return;
       settled = true;
       resolve(value);
     };
+
     const scan = (chunk: Buffer) => {
-      const match = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i.exec(chunk.toString());
-      if (match) finish(match[0]);
+      const text = chunk.toString();
+      log.push(text);
+      if (log.length > 40) log.shift();
+
+      const match = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i.exec(text);
+      if (match && !url) url = match[0];
+      if (/Registered tunnel connection/i.test(text)) registered = true;
+      if (url && registered) finish({ url });
     };
+
     proc.stdout?.on('data', scan);
     proc.stderr?.on('data', scan);
     proc.on('error', () => finish(null));
     proc.on('exit', () => finish(null));
-    setTimeout(() => finish(null), 20_000);
+    setTimeout(() => finish(url && registered ? { url } : null), 45_000);
   });
 
-  if (!url) {
+  if (!ready) {
+    proc.kill('SIGTERM');
+    const output = log.join('');
+    if (/error code: 1015|429/.test(output)) {
+      // Worth naming, because it looks exactly like a broken program and is not.
+      console.warn(
+        '[swarm] Cloudflare is rate-limiting quick tunnels from this IP (error 1015).\n' +
+          '        Nothing is wrong with the app — it will keep serving on localhost.\n' +
+          '        Quick tunnels are per-IP limited; wait a while, use a phone hotspot,\n' +
+          '        or run with SWARM_DEPLOY_TARGET=local and show it on this machine.',
+      );
+    } else {
+      console.warn(`[swarm] cloudflared never established a tunnel:\n${log.slice(-8).join('')}`);
+    }
+    return null;
+  }
+
+  // Give DNS a moment before the first lookup, for the reason above.
+  await sleep(3000);
+
+  if (!(await waitForServer(ready.url, 20, TUNNEL_WAIT))) {
+    console.warn(
+      `[swarm] ${ready.url} registered but never answered — giving up on the tunnel.\n` +
+        `        cloudflared said:\n${log.slice(-6).join('')}`,
+    );
     proc.kill('SIGTERM');
     return null;
   }
-  return { proc, url };
+
+  return { proc, url: ready.url };
 }
 
 export const deployTool: ToolImpl = {
@@ -153,10 +278,12 @@ export const deployTool: ToolImpl = {
     const entry = String(input.entry);
     ctx.sandbox.resolve(entry); // throws if the entrypoint escapes the workspace
 
-    // The tunnel survives; only the app process is replaced.
+    // The tunnel survives; only the app process is replaced. Joining the
+    // pre-warm rather than inspecting `prewarmed` is what stops deploy racing
+    // it and opening a rival tunnel.
     const port = PORTS.app;
-    const reusable = prewarmed?.port === port ? prewarmed : null;
     await teardown();
+    const tunnelUrl = DEPLOY_TARGET === 'tunnel' ? await prewarmTunnel(port) : null;
     const app = spawn('node', [entry], {
       cwd: ctx.sandbox.root,
       env: { ...process.env, PORT: String(port), NODE_ENV: 'production' },
@@ -183,25 +310,50 @@ export const deployTool: ToolImpl = {
     let note = 'Served locally.';
 
     if (DEPLOY_TARGET === 'tunnel') {
-      const tunnel = reusable
-        ? { proc: reusable.proc, url: reusable.url }
-        : await startTunnel(port);
-      if (tunnel) {
-        current = { app, tunnel: tunnel.proc, url: tunnel.url, port };
-        url = tunnel.url;
-        note = reusable
-          ? 'Served locally and exposed through the cloudflared tunnel opened earlier in the run.'
-          : 'Served locally and exposed publicly through a cloudflared quick tunnel.';
+      if (tunnelUrl && prewarmed) {
+        current = { app, tunnel: prewarmed.proc, url: tunnelUrl, port };
+        url = tunnelUrl;
+        note = 'Served locally and exposed publicly through a cloudflared quick tunnel.';
       } else {
         current = { app, url: localUrl, port };
         note =
-          'cloudflared was unavailable, so this is the local URL only. Install cloudflared for a public URL.';
+          'No working tunnel, so this is the local URL only. Nobody outside this machine can open it.';
       }
     } else if (DEPLOY_TARGET === 'fly') {
       current = { app, url: localUrl, port };
       note = 'The fly backend is not implemented; fell back to the local URL.';
     } else {
       current = { app, url: localUrl, port };
+    }
+
+    /*
+     * Check the URL we are about to report — not the one we happen to know is
+     * up.
+     *
+     * The whole point of this module is never reporting a URL that has not
+     * answered a request, and until now it checked localhost and then handed
+     * back a tunnel hostname it had never probed. A dead tunnel therefore
+     * produced a perfectly confident deploy, a QR code pointing at nothing, and
+     * an empty iframe, while the app itself ran fine on the machine.
+     *
+     * Give the tunnel a few seconds to route to a just-started origin before
+     * giving up on it.
+     */
+    /*
+     * Cloudflare answering is not the app answering.
+     *
+     * A tunnel whose connector is gone still returns a page — 530, 502, 1033 —
+     * so "did anything reply?" is too weak a test for the URL we are about to
+     * publish. Anything 5xx from the edge means the request never reached the
+     * app, which is indistinguishable from a dead link for the person scanning
+     * the QR code.
+     */
+    if (url !== localUrl && !(await reachesApp(url))) {
+      console.warn(`[swarm] ${url} did not answer — falling back to the local URL`);
+      current = { app, url: localUrl, port };
+      url = localUrl;
+      note =
+        'The tunnel did not answer, so this is the local URL only. Nobody outside this machine can open it.';
     }
 
     return {
