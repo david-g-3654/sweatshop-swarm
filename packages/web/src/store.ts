@@ -245,11 +245,28 @@ interface Store {
   runs: RunSummary[];
   error: string | null;
   derived: SwarmState;
+  loop: { enabled: boolean; dwellSeconds: number; nextRunInSeconds: number | null };
+  /**
+   * True when what is on screen came off disk rather than happening now.
+   *
+   * A recording carries the deploy URL it had at the time, and that app stopped
+   * running long ago — embedding it gives you a blank white panel. The server
+   * states this outright rather than us guessing from the snapshot's shape.
+   */
+  replay: boolean;
 
   setConnected(connected: boolean): void;
   ingest(frame: ServerFrame): void;
   setCursor(cursor: number): void;
   follow(): void;
+  /**
+   * Index of the run's first rejection, wound back a little.
+   *
+   * At a booth people arrive mid-run, usually during a phase where not much is
+   * visibly happening. This makes the best thirty seconds of the project
+   * available on demand instead of hoping the timing cooperates.
+   */
+  rejectionCursor(): number | null;
 }
 
 export const useSwarm = create<Store>((set, get) => ({
@@ -260,6 +277,8 @@ export const useSwarm = create<Store>((set, get) => ({
   runs: [],
   error: null,
   derived: initialState(),
+  loop: { enabled: false, dwellSeconds: 0, nextRunInSeconds: null },
+  replay: false,
 
   setConnected: (connected) => set({ connected }),
 
@@ -270,6 +289,7 @@ export const useSwarm = create<Store>((set, get) => ({
         cursor: frame.events.length,
         scrubbing: false,
         error: null,
+        replay: !frame.live,
         derived: reduceEvents(frame.events, frame.events.length),
       });
       return;
@@ -292,6 +312,16 @@ export const useSwarm = create<Store>((set, get) => ({
       set({ runs: frame.runs });
       return;
     }
+    if (frame.kind === 'loop') {
+      set({
+        loop: {
+          enabled: frame.enabled,
+          dwellSeconds: frame.dwellSeconds,
+          nextRunInSeconds: frame.nextRunInSeconds,
+        },
+      });
+      return;
+    }
     if (frame.kind === 'error') set({ error: frame.message });
   },
 
@@ -308,5 +338,16 @@ export const useSwarm = create<Store>((set, get) => ({
   follow: () => {
     const { events } = get();
     set({ cursor: events.length, scrubbing: false, derived: reduceEvents(events, events.length) });
+  },
+
+  rejectionCursor: () => {
+    const { events } = get();
+    const at = events.findIndex((e) => e.type === 'message.sent' && e.kind === 'reject');
+    if (at < 0) return null;
+    // Start a few seconds of run-time earlier so the verdict lands on screen
+    // rather than having already happened.
+    const target = events[at]!.ts - 4000;
+    for (let i = at; i >= 0; i--) if (events[i]!.ts <= target) return i;
+    return 0;
   },
 }));

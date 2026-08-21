@@ -50,16 +50,29 @@ export async function prewarmTunnel(port: number): Promise<string | null> {
   return tunnel.url;
 }
 
-/** Kill whatever the previous run left running. Called before every run. */
+/**
+ * Stop the app from the previous run, and keep the tunnel.
+ *
+ * The tunnel deliberately outlives runs. A cloudflared quick tunnel gets a new
+ * random hostname every time it is opened, so recycling it between runs would
+ * invalidate any QR code on a booth table — which is the whole point of having
+ * one. The port never changes, so there is never a reason to recycle it.
+ *
+ * It also means the second run onward pays nothing for the tunnel at all.
+ */
 export async function teardown(): Promise<void> {
-  if (prewarmed && prewarmed.proc !== current?.tunnel) prewarmed.proc.kill('SIGTERM');
-  prewarmed = null;
   if (!current) return;
-  current.tunnel?.kill('SIGTERM');
   current.app.kill('SIGTERM');
   current = null;
   // Give the OS a moment to release the port before the next run grabs it.
   await sleep(300);
+}
+
+/** Stop everything, tunnel included. For process exit only. */
+export async function shutdown(): Promise<void> {
+  await teardown();
+  prewarmed?.proc.kill('SIGTERM');
+  prewarmed = null;
 }
 
 export function currentUrl(): string | null {
@@ -140,16 +153,10 @@ export const deployTool: ToolImpl = {
     const entry = String(input.entry);
     ctx.sandbox.resolve(entry); // throws if the entrypoint escapes the workspace
 
-    // Keep a pre-warmed tunnel across the teardown; it is the slow part and it
-    // has no dependency on the app process being replaced.
+    // The tunnel survives; only the app process is replaced.
     const port = PORTS.app;
     const reusable = prewarmed?.port === port ? prewarmed : null;
-    if (current) {
-      current.app.kill('SIGTERM');
-      if (current.tunnel && current.tunnel !== reusable?.proc) current.tunnel.kill('SIGTERM');
-      current = null;
-      await sleep(300);
-    }
+    await teardown();
     const app = spawn('node', [entry], {
       cwd: ctx.sandbox.root,
       env: { ...process.env, PORT: String(port), NODE_ENV: 'production' },

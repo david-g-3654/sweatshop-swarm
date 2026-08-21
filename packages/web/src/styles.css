@@ -417,6 +417,14 @@ button.control:hover:not(:disabled) { border-color: var(--phosphor); color: var(
 button.control:disabled { opacity: 0.35; cursor: not-allowed; }
 button.control:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
 button.control.primary { border-color: var(--phosphor); color: var(--phosphor); }
+/* An armed booth loop has to be obvious across the room — you need to know at a
+   glance whether the screen will keep moving while you are talking to someone. */
+button.control[aria-pressed='true'] {
+  border-color: var(--go);
+  color: var(--void);
+  background: var(--go);
+  font-weight: 700;
+}
 
 .counter { color: var(--dim); font-size: 0.82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -579,3 +587,17 @@ button.control.primary { border-color: var(--phosphor); color: var(--phosphor); 
   .artifact-frame { min-height: 22rem; }
   .artifact-side { flex: none; border-left: 0; border-top: 1px solid var(--rule); }
 }
+
+.artifact-gone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2rem;
+  text-align: center;
+  color: var(--dim);
+}
+.artifact-gone p { margin: 0; max-width: 28rem; }
+.artifact-gone code { color: var(--phosphor); word-break: break-all; }

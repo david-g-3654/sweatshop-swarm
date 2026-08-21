@@ -1,10 +1,10 @@
 import http from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { SwarmEvent, ClientFrame, ServerFrame } from '@swarm/shared';
-import { PORTS, PROVIDER, MODELS, FEATURES } from './config.js';
+import { PORTS, PROVIDER, MODELS, FEATURES, BOOTH_DWELL_SECONDS, BOOTH_ON_BOOT } from './config.js';
 import { Orchestrator } from './orchestrator.js';
 import { Rehearsal } from './rehearsal.js';
-import { teardown } from './tools/deploy.js';
+import { shutdown as stopDeployments } from './tools/deploy.js';
 import * as recorder from './recorder.js';
 import { hasKey, keyFingerprint } from './llm/client.js';
 
@@ -20,8 +20,74 @@ let running = false;
 let currentEvents: SwarmEvent[] = [];
 let currentRunId: string | null = null;
 let currentGoal: string | null = null;
+/** True when currentEvents belong to a run this process performed. */
+let currentIsLive = false;
 
 const clients = new Set<WebSocket>();
+
+/**
+ * Booth loop.
+ *
+ * At a showcase the screen has to be doing something whenever anyone glances
+ * over — a still frame gets walked past. Rehearsal mode costs nothing per run
+ * and still ships a real, working URL, so it can run all session.
+ *
+ * Between runs the shipped app is deliberately left up for a dwell period. The
+ * booth rhythm is: watch the agents argue for half a minute, then have several
+ * minutes of a live app you can actually poke at. Restarting immediately would
+ * yank the app out from under anyone using it.
+ *
+ * Only rehearsal loops. Looping live runs would spend real money unattended,
+ * which is not a thing to leave running while you talk to someone.
+ */
+let loopEnabled = false;
+let loopGoal: string | null = null;
+let loopTimer: NodeJS.Timeout | null = null;
+let nextRunAt: number | null = null;
+
+function loopFrame(): ServerFrame {
+  return {
+    kind: 'loop',
+    enabled: loopEnabled,
+    dwellSeconds: BOOTH_DWELL_SECONDS,
+    nextRunInSeconds: nextRunAt ? Math.max(0, Math.round((nextRunAt - Date.now()) / 1000)) : null,
+  };
+}
+
+function cancelLoopTimer(): void {
+  if (loopTimer) clearTimeout(loopTimer);
+  loopTimer = null;
+  nextRunAt = null;
+}
+
+function scheduleNextLoopRun(): void {
+  cancelLoopTimer();
+  if (!loopEnabled) return;
+  nextRunAt = Date.now() + BOOTH_DWELL_SECONDS * 1000;
+  broadcast(loopFrame());
+  loopTimer = setTimeout(() => {
+    loopTimer = null;
+    nextRunAt = null;
+    if (loopEnabled && !running) void startRun(loopGoal ?? DEFAULT_GOAL, 'rehearsal');
+  }, BOOTH_DWELL_SECONDS * 1000);
+}
+
+function setLoop(enabled: boolean, goal?: string): void {
+  loopEnabled = enabled;
+  if (goal) loopGoal = goal;
+  if (!enabled) {
+    cancelLoopTimer();
+    broadcast(loopFrame());
+    return;
+  }
+  broadcast(loopFrame());
+  // Arming it while nothing is running should start something immediately;
+  // nobody taps "loop" to then watch a blank screen for two minutes.
+  if (!running) void startRun(loopGoal ?? DEFAULT_GOAL, 'rehearsal');
+}
+
+const DEFAULT_GOAL =
+  'Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.';
 
 function send(socket: WebSocket, frame: ServerFrame): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(frame));
@@ -44,7 +110,8 @@ async function startRun(goal: string, mode: 'live' | 'rehearsal' = 'live'): Prom
   currentGoal = goal;
 
   // Reset every connected client to the new run before anything else arrives.
-  broadcast({ kind: 'snapshot', runId: currentRunId, goal, events: [] });
+  currentIsLive = true;
+  broadcast({ kind: 'snapshot', runId: currentRunId, goal, events: [], live: true });
 
   driver.bus.subscribe((event) => {
     currentEvents.push(event);
@@ -61,6 +128,8 @@ async function startRun(goal: string, mode: 'live' | 'rehearsal' = 'live'): Prom
     broadcast({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
   } finally {
     running = false;
+    // The deployment stays up through the dwell — that is the point of it.
+    scheduleNextLoopRun();
   }
 }
 
@@ -75,7 +144,8 @@ async function loadRun(runId: string): Promise<void> {
   currentEvents = run.events;
   currentRunId = run.runId;
   currentGoal = run.goal;
-  broadcast({ kind: 'snapshot', runId: run.runId, goal: run.goal, events: run.events });
+  currentIsLive = false;
+  broadcast({ kind: 'snapshot', runId: run.runId, goal: run.goal, events: run.events, live: false });
 }
 
 const server = http.createServer((req, res) => {
@@ -91,10 +161,20 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', async (socket) => {
+/**
+ * Register the message handler before anything can yield.
+ *
+ * This used to send the opening frames first, one of which awaited a directory
+ * read — and a frame arriving during that await was dropped on the floor, because
+ * ws has no handler to deliver it to yet and does not buffer.
+ *
+ * The symptom was a button doing nothing when pressed straight after the page
+ * loaded, which is the single worst failure mode at a booth: it looks broken,
+ * and pressing it again works, so you never trust it. Handler first, greetings
+ * after.
+ */
+wss.on('connection', (socket) => {
   clients.add(socket);
-  send(socket, { kind: 'snapshot', runId: currentRunId, goal: currentGoal, events: currentEvents });
-  send(socket, { kind: 'runs', runs: await recorder.list() });
 
   socket.on('message', async (raw) => {
     let frame: ClientFrame;
@@ -109,6 +189,9 @@ wss.on('connection', async (socket) => {
       case 'start':
         void startRun(frame.goal, frame.mode ?? 'live');
         break;
+      case 'set-loop':
+        setLoop(frame.enabled, frame.goal);
+        break;
       case 'list-runs':
         send(socket, { kind: 'runs', runs: await recorder.list() });
         break;
@@ -121,6 +204,17 @@ wss.on('connection', async (socket) => {
   });
 
   socket.on('close', () => clients.delete(socket));
+
+  // Greetings. Synchronous ones first; the run list can arrive whenever.
+  send(socket, {
+    kind: 'snapshot',
+    runId: currentRunId,
+    goal: currentGoal,
+    events: currentEvents,
+    live: currentIsLive,
+  });
+  send(socket, loopFrame());
+  void recorder.list().then((runs) => send(socket, { kind: 'runs', runs }));
 });
 
 /**
@@ -158,6 +252,10 @@ server.listen(PORTS.ws, () => {
   console.log(`[swarm] provider ${PROVIDER}  key ${keyFingerprint()}`);
   console.log(`[swarm] models   ${MODELS.planner} / ${MODELS.worker}`);
   console.log(`[swarm] features ${enabled.length ? enabled.join(' ') : 'none'}`);
+  if (BOOTH_ON_BOOT) {
+    console.log(`[swarm] booth loop armed — rehearsing every ${BOOTH_DWELL_SECONDS}s`);
+    setLoop(true);
+  }
   if (!hasKey()) {
     const key = PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY';
     console.warn(`[swarm] ${key} is missing or unusable — live runs will fail. Rehearse still works.`);
@@ -167,7 +265,7 @@ server.listen(PORTS.ws, () => {
 // A run leaves a server (and maybe a tunnel) alive on purpose. Clean them up
 // when the orchestrator itself goes down, or the port stays taken.
 const shutdown = async () => {
-  await teardown();
+  await stopDeployments();
   process.exit(0);
 };
 process.on('SIGINT', shutdown);

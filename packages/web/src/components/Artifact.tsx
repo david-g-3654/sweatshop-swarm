@@ -10,7 +10,7 @@ import type { SwarmState } from '../store';
  * nobody can type from the back of a room, and the close of this demo is a
  * roomful of people hitting the link at once and watching the chart move.
  */
-export function Artifact({ state }: { state: SwarmState }) {
+export function Artifact({ state, replay = false }: { state: SwarmState; replay?: boolean }) {
   const url = state.deployUrl;
   if (!url) return null;
 
@@ -18,13 +18,25 @@ export function Artifact({ state }: { state: SwarmState }) {
 
   return (
     <div className="artifact">
-      <iframe
-        className="artifact-frame"
-        src={url}
-        title="The deployed application"
-        // No sandbox attribute: this is the app the team just built and the
-        // whole point is watching it work, live stream and all.
-      />
+      {replay ? (
+        // A recording's app stopped when that run did. Saying so beats a blank
+        // white rectangle that looks like something is broken.
+        <div className="artifact-gone">
+          <p className="placard">Recorded run</p>
+          <p>
+            This run shipped to <code>{url}</code>, and that app stopped when the run ended.
+          </p>
+          <p className="artifact-note">Start a run to get a live one.</p>
+        </div>
+      ) : (
+        <iframe
+          className="artifact-frame"
+          src={url}
+          title="The deployed application"
+          // No sandbox attribute: this is the app the team just built and the
+          // whole point is watching it work, live updates and all.
+        />
+      )}
 
       <aside className="artifact-side">
         <span className="placard">Scan to open</span>

@@ -12,15 +12,17 @@ import { Artifact } from './components/Artifact';
 
 export function App() {
   const { send } = useSocket();
-  const { derived, connected, error } = useSwarm();
+  const { derived, connected, error, replay } = useSwarm();
   const [stageView, setStageView] = useState<'graph' | 'artifact'>('graph');
 
   // The moment a URL exists, show what was built. Scrubbing back to before the
   // deploy takes the view with it, so the panel never shows a stale artifact.
   const deployUrl = derived.deployUrl;
   useEffect(() => {
-    setStageView(deployUrl ? 'artifact' : 'graph');
-  }, [deployUrl]);
+    // Only jump to the artifact for a run happening now. A recording's URL
+    // points at an app that stopped running when that run ended.
+    setStageView(deployUrl && !replay ? 'artifact' : 'graph');
+  }, [deployUrl, replay]);
 
   const showing = deployUrl ? stageView : 'graph';
 
@@ -59,7 +61,7 @@ export function App() {
             </span>
           </header>
           <div className="body" style={{ overflow: 'hidden' }}>
-            {showing === 'artifact' ? <Artifact state={derived} /> : <Graph state={derived} />}
+            {showing === 'artifact' ? <Artifact state={derived} replay={replay} /> : <Graph state={derived} />}
           </div>
         </section>
 
@@ -90,7 +92,10 @@ export function App() {
         </div>
       )}
 
-      <Scrubber onStart={(goal, mode) => send({ kind: 'start', goal, mode })} />
+      <Scrubber
+        onStart={(goal, mode) => send({ kind: 'start', goal, mode })}
+        onLoop={(enabled, goal) => send({ kind: 'set-loop', enabled, goal })}
+      />
 
       <GoNoGo state={derived} />
     </div>

@@ -10,8 +10,15 @@ import { met } from '../time';
  * this is presented as "here is a full run from this morning", and it has to
  * be true — same events, same order, same durations, same reducer.
  */
-export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | 'rehearsal') => void }) {
-  const { events, cursor, scrubbing, setCursor, follow, derived, runs, connected } = useSwarm();
+export function Scrubber({
+  onStart,
+  onLoop,
+}: {
+  onStart: (goal: string, mode: 'live' | 'rehearsal') => void;
+  onLoop: (enabled: boolean, goal: string) => void;
+}) {
+  const { events, cursor, scrubbing, setCursor, follow, derived, runs, connected, loop, rejectionCursor } =
+    useSwarm();
   const [goal, setGoal] = useState('Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.');
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | null>(null);
@@ -85,6 +92,18 @@ export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | '
         >
           Rehearse
         </button>
+        <button
+          className="control"
+          aria-pressed={loop.enabled}
+          onClick={() => onLoop(!loop.enabled, goal)}
+          disabled={!connected}
+          title="Rehearse on repeat all session, leaving the shipped app up between runs"
+        >
+          {loop.enabled ? 'Loop on' : 'Loop'}
+        </button>
+        {loop.enabled && loop.nextRunInSeconds !== null && (
+          <span className="counter">next in {loop.nextRunInSeconds}s</span>
+        )}
         {!connected && <span className="counter">reconnecting…</span>}
 
         {runs.length > 0 && (
@@ -129,6 +148,25 @@ export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | '
         <span className="counter">
           {met(derived.startedAt, derived.now)} · {cursor}/{events.length}
         </span>
+
+        {/*
+          The single most valuable thirty seconds of any run, on a button. At a
+          booth you cannot rely on someone arriving at the right moment.
+        */}
+        <button
+          className="control"
+          onClick={() => {
+            const at = rejectionCursor();
+            if (at === null) return;
+            stop();
+            setCursor(at);
+            setPlaying(true);
+          }}
+          disabled={rejectionCursor() === null}
+          title="Jump to the moment the Reviewer rejects the work"
+        >
+          The rejection
+        </button>
 
         <button
           className="control"

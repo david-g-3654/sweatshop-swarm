@@ -1,6 +1,6 @@
 import { Orchestrator } from './orchestrator.js';
 import { Rehearsal } from './rehearsal.js';
-import { teardown } from './tools/deploy.js';
+import { shutdown } from './tools/deploy.js';
 import * as recorder from './recorder.js';
 
 /**
@@ -33,7 +33,16 @@ const goal = flag('goal', 'Build and deploy a URL shortener with a real-time ana
 const mode = args.includes('--rehearse') ? 'rehearsal' : 'live';
 const keepAlive = args.includes('--keep-alive');
 
-const driver = mode === 'rehearsal' ? new Rehearsal(goal, 0.35) : new Orchestrator({ goal });
+// Honour the configured speed. A hardcoded value here meant
+// SWARM_REHEARSAL_SPEED silently did nothing from the CLI, which is worse than
+// not having the setting at all — it is documented, so people trust it.
+const speed = args.includes('--speed') ? Number(flag('speed', '')) : undefined;
+const driver =
+  mode === 'rehearsal'
+    ? speed && Number.isFinite(speed)
+      ? new Rehearsal(goal, speed)
+      : new Rehearsal(goal)
+    : new Orchestrator({ goal });
 
 driver.bus.subscribe((event) => {
   if (event.type === 'drama') {
@@ -51,10 +60,10 @@ if (outcome.deployUrl) console.log(`live at: ${outcome.deployUrl}`);
 if (keepAlive && outcome.deployUrl) {
   console.log('holding the deployment open — ctrl-c to stop');
   process.on('SIGINT', async () => {
-    await teardown();
+    await shutdown();
     process.exit(0);
   });
 } else {
-  await teardown();
+  await shutdown();
   process.exit(outcome.ok ? 0 : 1);
 }

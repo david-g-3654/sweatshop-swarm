@@ -10,7 +10,8 @@ build/
 /sandbox/
 /runs/*.json
 !/runs/.gitkeep
-# One recorded run is checked in so a fresh clone has something to replay
-# through the scrubber immediately. The filename has to stay equal to the runId
-# inside it — that is how the loader finds it.
-!/runs/rehearsal-mt2r8dp0-c730.json
+# Recordings named sample-* are checked in so a fresh clone has something to
+# replay immediately, and the booth loop's pruning leaves them alone. The
+# filename has to stay equal to the runId inside it — that is how the loader
+# finds it on disk.
+!/runs/sample-*.json

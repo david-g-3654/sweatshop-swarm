@@ -209,6 +209,18 @@ export const PORTS = {
  */
 export const REHEARSAL_SPEED = Number(process.env.SWARM_REHEARSAL_SPEED ?? 2.5);
 
+/**
+ * Seconds the shipped app is left up between booth-loop runs.
+ *
+ * Long enough that someone who wanders over mid-cycle can shorten a link and
+ * watch their own click land, rather than having the app restart under them.
+ * The screen alternates: agents arguing, then the thing they built, on repeat.
+ */
+export const BOOTH_DWELL_SECONDS = Number(process.env.SWARM_BOOTH_DWELL ?? 150);
+
+/** Start the booth loop as soon as the server comes up. */
+export const BOOTH_ON_BOOT = process.env.SWARM_BOOTH === '1';
+
 export const DEPLOY_TARGET = (process.env.SWARM_DEPLOY_TARGET ?? 'tunnel') as
   | 'tunnel'
   | 'local'
