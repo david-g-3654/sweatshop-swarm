@@ -1,12 +1,12 @@
 import http from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { SwarmEvent, ClientFrame, ServerFrame } from '@swarm/shared';
-import { PORTS, PROVIDER } from './config.js';
+import { PORTS, PROVIDER, MODELS, FEATURES } from './config.js';
 import { Orchestrator } from './orchestrator.js';
 import { Rehearsal } from './rehearsal.js';
 import { teardown } from './tools/deploy.js';
 import * as recorder from './recorder.js';
-import { hasKey } from './llm/client.js';
+import { hasKey, keyFingerprint } from './llm/client.js';
 
 /**
  * The server the mission-control UI talks to.
@@ -148,11 +148,19 @@ server.on('error', onServerError);
 wss.on('error', onServerError);
 
 server.listen(PORTS.ws, () => {
+  // Everything that decides whether a live run can work, on four lines, before
+  // anyone presses a button. A stale server or a bad key shows up here rather
+  // than as a wall of identical failures a minute into a demo.
+  const enabled = Object.entries(FEATURES)
+    .filter(([, on]) => on)
+    .map(([name]) => name);
   console.log(`[swarm] mission control feed on ws://localhost:${PORTS.ws}`);
-  console.log(`[swarm] provider: ${PROVIDER}`);
+  console.log(`[swarm] provider ${PROVIDER}  key ${keyFingerprint()}`);
+  console.log(`[swarm] models   ${MODELS.planner} / ${MODELS.worker}`);
+  console.log(`[swarm] features ${enabled.length ? enabled.join(' ') : 'none'}`);
   if (!hasKey()) {
     const key = PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY';
-    console.warn(`[swarm] ${key} is not set — live runs will fail, but Rehearse still works.`);
+    console.warn(`[swarm] ${key} is missing or unusable — live runs will fail. Rehearse still works.`);
   }
 });
 

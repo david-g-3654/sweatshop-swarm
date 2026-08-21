@@ -76,6 +76,23 @@ export function client(): Anthropic {
   return cached;
 }
 
+/**
+ * A safe, human-checkable description of the credential in force.
+ *
+ * Printed at startup so a stale process or a bad key is obvious before anyone
+ * clicks Run live, instead of surfacing as six identical failures a minute in.
+ * Only the last four characters are shown — enough to tell two keys apart,
+ * useless to anyone reading over your shoulder or watching the projector.
+ */
+export function keyFingerprint(): string {
+  try {
+    const key = apiKey();
+    return `…${key.slice(-4)} (${key.length} chars)`;
+  } catch (err) {
+    return err instanceof ConfigError ? 'UNUSABLE' : 'unknown';
+  }
+}
+
 export function hasKey(): boolean {
   try {
     apiKey();
