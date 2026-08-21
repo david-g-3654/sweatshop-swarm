@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,6 +6,16 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 /** Repo root, derived from this file rather than cwd so npm scripts can run anywhere. */
 export const REPO_ROOT = path.resolve(here, '../../..');
+
+/**
+ * Load .env from the repo root, by absolute path.
+ *
+ * `dotenv/config` reads from process.cwd(), and `npm --workspace ... run x`
+ * sets cwd to the *package* directory — so the root .env everything documents
+ * was silently never read, and every run looked like a missing key. Deriving
+ * the path from this file's location instead makes it work from any cwd.
+ */
+loadEnv({ path: path.join(REPO_ROOT, '.env') });
 
 /** Every file an agent touches lives under here. Nothing escapes it. */
 export const SANDBOX_ROOT = path.join(REPO_ROOT, 'sandbox');

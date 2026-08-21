@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import 'dotenv/config';
+// config.js loads .env from the repo root; importing dotenv here as well would
+// race it with a cwd-relative read.
 import { PROVIDER, MODELS, OPENROUTER_BASE_URL } from './config.js';
 
 /**
@@ -63,8 +64,13 @@ interface Result {
   name: string;
   envVar: string | null;
   ok: boolean;
+  /** Accepted, but did not actually deliver what it is wanted for. */
+  partial: boolean;
   note: string;
 }
+
+/** An inspection either passes, or passes-but-hollow with a reason. */
+type Verdict = string | { note: string; partial: true };
 
 const results: Result[] = [];
 
@@ -72,19 +78,24 @@ async function probe(
   name: string,
   envVar: string | null,
   params: Anthropic.MessageCreateParamsNonStreaming,
-  inspect?: (message: Anthropic.Message) => string,
+  inspect?: (message: Anthropic.Message) => Verdict,
 ): Promise<boolean> {
   process.stdout.write(`  ${name.padEnd(28)} `);
   try {
     const message = await api.messages.create(params);
-    const note = inspect ? inspect(message) : 'accepted';
-    results.push({ name, envVar, ok: true, note });
-    console.log(`ok — ${note}`);
+    const verdict: Verdict = inspect ? inspect(message) : 'accepted';
+    const partial = typeof verdict === 'object';
+    const note = typeof verdict === 'object' ? verdict.note : verdict;
+    results.push({ name, envVar, ok: true, partial, note });
+    // "Accepted" is not the same as "works". A parameter the gateway swallows
+    // without honouring is the failure mode most likely to be missed, so it
+    // gets its own marker rather than being rounded up to ok.
+    console.log(`${partial ? '~~' : 'ok'} — ${note}`);
     return true;
   } catch (err) {
     const note =
       err instanceof Anthropic.APIError ? `${err.status}: ${String(err.message).slice(0, 120)}` : String(err);
-    results.push({ name, envVar, ok: false, note });
+    results.push({ name, envVar, ok: false, partial: false, note });
     console.log(`no — ${note}`);
     return false;
   }
@@ -125,19 +136,35 @@ await probe('strict tool schemas', 'ARENA_STRICT_TOOLS', {
 });
 
 // 4. Adaptive thinking with a visible summary — the inner-monologue panel.
+//
+// The prompt has to be hard enough to be worth thinking about. Adaptive
+// thinking decides for itself whether to engage, so an easy question produces
+// no thinking block and looks exactly like an unsupported parameter.
 await probe(
   'thinking + summary',
   'ARENA_THINKING',
   {
     ...BASE,
-    messages: [{ role: 'user', content: 'Briefly: why is the sky blue?' }],
+    max_tokens: 3000,
+    messages: [
+      {
+        role: 'user',
+        content:
+          'Three switches outside a sealed room control three bulbs inside it. You may flip switches freely, then enter the room exactly once. Work out how to identify which switch controls which bulb, and explain why it works.',
+      },
+    ],
     thinking: { type: 'adaptive', display: 'summarized' },
   },
   (m) => {
-    const thinking = m.content.find((b) => b.type === 'thinking');
-    if (!thinking) return 'accepted, but no thinking block came back';
-    const text = thinking.type === 'thinking' ? thinking.thinking : '';
-    return text.trim() ? 'summary text returned' : 'accepted, but the summary was empty';
+    const block = m.content.find((b) => b.type === 'thinking');
+    if (!block) {
+      return { note: 'accepted, but no thinking block on a task that warrants one', partial: true };
+    }
+    const text = block.type === 'thinking' ? block.thinking : '';
+    if (!text.trim()) {
+      return { note: 'accepted, but the summary text was empty', partial: true };
+    }
+    return `summary returned (${text.trim().length} chars)`;
   },
 );
 
@@ -165,7 +192,8 @@ await probe(
   (m) => {
     const created = m.usage.cache_creation_input_tokens ?? 0;
     const read = m.usage.cache_read_input_tokens ?? 0;
-    return created || read ? `cache active (${created} written, ${read} read)` : 'accepted, but nothing cached';
+    if (!created && !read) return { note: 'accepted, but nothing was cached', partial: true };
+    return `cache active (${created} written, ${read} read)`;
   },
 );
 
@@ -179,25 +207,41 @@ if (!toolsWork) {
   process.exit(1);
 }
 
+const CONSEQUENCE: Record<string, string> = {
+  ARENA_THINKING: 'console panels stream visible text but no reasoning summary',
+  ARENA_EFFORT: 'models run at their default effort',
+  ARENA_STRICT_TOOLS: 'tool inputs are validated by the tools themselves, not the API',
+  ARENA_PROMPT_CACHE: 'the system prompt is billed in full on every turn',
+};
+
 const flags = results.filter((r) => r.envVar);
-const off = flags.filter((r) => !r.ok);
+const rejected = flags.filter((r) => !r.ok);
+const hollow = flags.filter((r) => r.ok && r.partial);
 
 console.log('\nPut these in .env:\n');
 console.log(`ARENA_PROVIDER=${PROVIDER}`);
+// A parameter that is accepted but not honoured still stays on: it costs
+// nothing and may engage on harder prompts than this probe uses.
 for (const flag of flags) console.log(`${flag.envVar}=${flag.ok ? 1 : 0}`);
 
-if (off.length === 0) {
-  console.log('\nEverything is supported. Nothing is degraded.\n');
-} else {
-  console.log(`\n${off.length} feature(s) unavailable — the run still works, with less polish:`);
-  for (const flag of off) {
-    const consequence: Record<string, string> = {
-      ARENA_THINKING: 'console panels stream visible text but no reasoning summary',
-      ARENA_EFFORT: 'models run at their default effort',
-      ARENA_STRICT_TOOLS: 'tool inputs are validated by the tools themselves, not the API',
-      ARENA_PROMPT_CACHE: 'the system prompt is billed in full on every turn',
-    };
-    console.log(`  - ${flag.name}: ${consequence[flag.envVar!] ?? 'degraded'}`);
-  }
-  console.log('');
+if (rejected.length === 0 && hollow.length === 0) {
+  console.log('\nEverything is supported and doing something. Nothing is degraded.\n');
 }
+
+if (rejected.length > 0) {
+  console.log(`\n${rejected.length} rejected — the run still works, with less polish:`);
+  for (const flag of rejected) {
+    console.log(`  - ${flag.name}: ${CONSEQUENCE[flag.envVar!] ?? 'degraded'}`);
+  }
+}
+
+if (hollow.length > 0) {
+  console.log(`\n${hollow.length} accepted but had no observable effect here:`);
+  for (const flag of hollow) {
+    console.log(`  - ${flag.name}: ${flag.note}`);
+    console.log(`      if that holds during a run: ${CONSEQUENCE[flag.envVar!] ?? 'degraded'}`);
+  }
+  console.log('\n  Left switched on — they cost nothing, and may behave differently');
+  console.log('  on the longer, harder prompts a real run uses.');
+}
+console.log('');
