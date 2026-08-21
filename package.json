@@ -1,0 +1,17 @@
+{
+  "name": "agent-arena",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Watch a software team of AI agents ship a feature live.",
+  "workspaces": [
+    "packages/shared",
+    "packages/orchestrator",
+    "packages/web"
+  ],
+  "scripts": {
+    "typecheck": "tsc -b packages/shared packages/orchestrator"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
