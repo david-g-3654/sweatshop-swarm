@@ -120,6 +120,18 @@ It is an estimate from a local price table — the authoritative number is the
 provider's dashboard — and a model with no price on file makes the figure a
 stated floor rather than silently reading as zero.
 
+### Where the money actually goes
+
+Input, overwhelmingly. A measured live run spent 652k input tokens against 45k
+output, because every turn resends the entire conversation so far, and six
+agents each take several turns.
+
+So there are two cache breakpoints, not one: the system prompt, and the last
+block of the last message. The second is the one that matters — measured over
+three turns, the first wrote 2235 tokens and the next two read them back while
+writing only ~40 tokens of delta each. Cache writes cost 1.25x and reads 0.1x,
+so it pays for itself from the second turn on.
+
 ## The sandbox
 
 Agents get a directory and an allowlist. Paths that escape the root are

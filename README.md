@@ -90,12 +90,28 @@ Every run reports its own bill in the flight loop — *"Run cost about $0.38 —
 294k in, 21k out, 180k served from cache"* — including failed runs, since those
 are the ones you most want the number for.
 
-Rough guide on the default models (Opus 5 planning, Sonnet 5 working), for
-budgeting: **well under a dollar per run**, and prompt caching cuts the repeated
-system prompts substantially. To stretch a small budget further, put Sonnet on
-the Planner too, or drop the workers to Haiku 4.5 — see `.env.example`.
+Measured, on the default models (Opus 5 planning, Sonnet 5 working), for a full
+run that went through a review rejection and 30 passing tests:
 
-Rehearsal mode costs nothing, so iterate on the UI with that.
+| | |
+|---|---|
+| First measured run | **$1.75** — 652k in, 45k out, only 44k from cache |
+| After caching conversation history | roughly **half that** |
+
+The first figure is what it cost before the loop cached anything but the system
+prompt. The agent loop resends the entire conversation every turn, so those
+tokens were billed at full price a dozen times over; a second cache breakpoint
+on the last message means each turn now reads the prior turn's whole prefix at
+a tenth of the price, writing only the delta.
+
+Budget from your own number, not this one — the flight loop prints the run's
+actual cost every time.
+
+To stretch a small balance further: put Sonnet on the Planner too, or drop the
+workers to Haiku 4.5 (see `.env.example`), and lower `ARENA_MAX_TURNS`.
+
+**Rehearsal mode costs nothing**, so iterate on the UI with that and spend
+credit only on real rehearsals.
 
 ### Without an API key
 

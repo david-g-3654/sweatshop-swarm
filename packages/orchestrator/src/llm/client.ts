@@ -53,6 +53,40 @@ export function hasKey(): boolean {
 }
 
 /**
+ * Mark the end of the conversation so far as cacheable.
+ *
+ * The agent loop resends the whole history every turn, so by the end of a run
+ * the same tokens have been billed at full price a dozen times over. Caching
+ * only the system prompt barely dents that — a measured live run read just 44k
+ * of 652k input tokens from cache.
+ *
+ * Putting a second breakpoint on the last block of the last message means each
+ * turn reads the previous turn's entire prefix at a tenth of the price. Cache
+ * writes cost 1.25x, so this pays for itself from the second turn onward, and
+ * every agent here runs several.
+ *
+ * The last message is always a user turn — either the task or a batch of
+ * tool_results — and both block types accept cache_control.
+ */
+function cacheConversationTail(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  if (messages.length === 0) return messages;
+  const index = messages.length - 1;
+  const last = messages[index]!;
+  const mark = { cache_control: { type: 'ephemeral' as const } };
+
+  const content: Anthropic.ContentBlockParam[] =
+    typeof last.content === 'string'
+      ? [{ type: 'text', text: last.content, ...mark }]
+      : last.content.map((block, i) =>
+          i === last.content.length - 1
+            ? ({ ...block, ...mark } as Anthropic.ContentBlockParam)
+            : block,
+        );
+
+  return [...messages.slice(0, index), { ...last, content }];
+}
+
+/**
  * Build the per-turn request, including only the optional parameters this
  * provider is configured to accept.
  */
@@ -76,7 +110,7 @@ export function buildRequest(options: {
     model: options.model,
     max_tokens: options.maxTokens ?? 16000,
     system,
-    messages: options.messages,
+    messages: FEATURES.promptCache ? cacheConversationTail(options.messages) : options.messages,
     tools: options.tools,
     // Adaptive thinking with a visible summary is what fills the inner-monologue
     // panel. Omitting the parameter entirely still leaves Sonnet 5 and Opus 5
