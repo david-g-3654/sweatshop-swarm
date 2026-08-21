@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { LIMITS } from '../config.js';
 import { Sandbox, isAllowedCommand, runCommand } from './sandbox.js';
+import { deployTool, httpCheckTool } from './deploy.js';
 
 /**
  * The tool layer.
@@ -187,6 +188,8 @@ export const ALL_TOOLS: Record<string, ToolImpl> = {
   list_files: listFiles,
   run_command: runCommandTool,
   run_tests: runTests,
+  deploy: deployTool,
+  http_check: httpCheckTool,
 };
 
 /** Build the tool array for one role from its whitelist. */
