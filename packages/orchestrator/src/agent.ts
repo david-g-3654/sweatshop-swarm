@@ -2,7 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { AgentStatus } from '@arena/shared';
 import { LIMITS } from './config.js';
 import type { EventBus } from './bus.js';
-import { ALL_TOOLS, toolsFor, type Sandbox, type ToolExecution } from './tools/index.js';
+import { toolsFor, type Sandbox, type ToolExecution } from './tools/index.js';
+import { executeToolWithEvents } from './tools/execute.js';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
@@ -210,62 +211,15 @@ export class Agent {
   private async executeTool(
     use: Anthropic.ToolUseBlock,
   ): Promise<{ use: Anthropic.ToolUseBlock; execution: ToolExecution }> {
-    const started = Date.now();
-    this.bus.emit({
-      type: 'tool.call',
-      agentId: this.spec.agentId,
-      callId: use.id,
-      tool: use.name,
-      input: use.input,
-    });
-
-    const impl = ALL_TOOLS[use.name];
-    let execution: ToolExecution;
-    if (!impl) {
-      execution = { ok: false, content: `No such tool: ${use.name}` };
-    } else {
-      try {
-        execution = await impl.run(use.input as Record<string, unknown>, {
-          sandbox: this.sandbox,
-          agentId: this.spec.agentId,
-        });
-      } catch (err) {
-        execution = { ok: false, content: `Tool failed: ${describeError(err)}` };
-      }
-    }
-
-    for (const change of execution.fileChanges ?? []) {
-      this.filesTouched.add(change.path);
-      this.bus.emit({
-        type: 'file.changed',
-        path: change.path,
-        action: change.action,
-        bytes: change.bytes,
-        by: this.spec.agentId,
-      });
-    }
-
-    if (execution.tests) {
-      this.bus.emit({
-        type: 'tests.ran',
-        agentId: this.spec.agentId,
-        passed: execution.tests.passed,
-        failed: execution.tests.failed,
-        ok: execution.tests.ok,
-        output: execution.tests.output,
-      });
-    }
-
-    this.bus.emit({
-      type: 'tool.result',
-      agentId: this.spec.agentId,
-      callId: use.id,
-      tool: use.name,
-      ok: execution.ok,
-      preview: execution.content.slice(0, 400),
-      durationMs: Date.now() - started,
-    });
-
+    const execution = await executeToolWithEvents(
+      this.bus,
+      this.spec.agentId,
+      this.sandbox,
+      use.name,
+      use.input as Record<string, unknown>,
+      use.id,
+    );
+    for (const change of execution.fileChanges ?? []) this.filesTouched.add(change.path);
     return { use, execution };
   }
 }

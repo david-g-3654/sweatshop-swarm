@@ -9,7 +9,10 @@
     "packages/web"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p packages/orchestrator"
+    "typecheck": "tsc --noEmit -p packages/orchestrator",
+    "rehearse": "npm --workspace @arena/orchestrator run rehearse",
+    "server": "npm --workspace @arena/orchestrator run start",
+    "test": "npm --workspace @arena/orchestrator run test"
   },
   "engines": {
     "node": ">=20"

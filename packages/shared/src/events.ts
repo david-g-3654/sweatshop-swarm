@@ -51,7 +51,19 @@ interface BaseEvent {
 }
 
 export type ArenaEvent =
-  | (BaseEvent & { type: 'run.started'; goal: string; schemaVersion: number })
+  | (BaseEvent & {
+      type: 'run.started';
+      goal: string;
+      schemaVersion: number;
+      /**
+       * 'live' means real model calls. 'rehearsal' means the agents' words are
+       * scripted while the tools, tests and deployment are real.
+       *
+       * This is on the event, not a UI setting, so a rehearsal cannot be shown
+       * as a live run by accident — the badge is driven by the run itself.
+       */
+      mode: 'live' | 'rehearsal';
+    })
   | (BaseEvent & { type: 'run.finished'; ok: boolean; summary: string; deployUrl?: string })
   | (BaseEvent & { type: 'phase.changed'; phase: Phase })
 

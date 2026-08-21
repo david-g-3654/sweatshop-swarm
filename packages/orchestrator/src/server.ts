@@ -3,6 +3,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { ArenaEvent, ClientFrame, ServerFrame } from '@arena/shared';
 import { PORTS } from './config.js';
 import { Orchestrator } from './orchestrator.js';
+import { Rehearsal } from './rehearsal.js';
 import { teardown } from './tools/deploy.js';
 import * as recorder from './recorder.js';
 
@@ -13,7 +14,6 @@ import * as recorder from './recorder.js';
  * port and the sandbox, and there is exactly one projector.
  */
 
-let active: Orchestrator | null = null;
 let running = false;
 /** Events of the most recent run (live or loaded from disk) for late joiners. */
 let currentEvents: ArenaEvent[] = [];
@@ -30,30 +30,29 @@ function broadcast(frame: ServerFrame): void {
   for (const client of clients) send(client, frame);
 }
 
-async function startRun(goal: string): Promise<void> {
+async function startRun(goal: string, mode: 'live' | 'rehearsal' = 'live'): Promise<void> {
   if (running) {
     broadcast({ kind: 'error', message: 'A run is already in progress.' });
     return;
   }
   running = true;
 
-  const orchestrator = new Orchestrator({ goal });
-  active = orchestrator;
+  const driver = mode === 'rehearsal' ? new Rehearsal(goal) : new Orchestrator({ goal });
   currentEvents = [];
-  currentRunId = orchestrator.bus.runId;
+  currentRunId = driver.bus.runId;
   currentGoal = goal;
 
   // Reset every connected client to the new run before anything else arrives.
   broadcast({ kind: 'snapshot', runId: currentRunId, goal, events: [] });
 
-  orchestrator.bus.subscribe((event) => {
+  driver.bus.subscribe((event) => {
     currentEvents.push(event);
     broadcast({ kind: 'event', event });
   });
 
   try {
-    const outcome = await orchestrator.run();
-    const file = await recorder.save(orchestrator.bus.toRecording());
+    const outcome = await driver.run();
+    const file = await recorder.save(driver.bus.toRecording());
     console.log(`[arena] run ${outcome.runId} ${outcome.ok ? 'succeeded' : 'failed'} — recorded to ${file}`);
     broadcast({ kind: 'runs', runs: await recorder.list() });
   } catch (err) {
@@ -61,7 +60,6 @@ async function startRun(goal: string): Promise<void> {
     broadcast({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
   } finally {
     running = false;
-    active = null;
   }
 }
 
@@ -108,7 +106,7 @@ wss.on('connection', async (socket) => {
 
     switch (frame.kind) {
       case 'start':
-        void startRun(frame.goal);
+        void startRun(frame.goal, frame.mode ?? 'live');
         break;
       case 'list-runs':
         send(socket, { kind: 'runs', runs: await recorder.list() });
@@ -140,4 +138,4 @@ const shutdown = async () => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-export { startRun, active };
+export { startRun };

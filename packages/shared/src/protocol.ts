@@ -10,7 +10,7 @@ export type ServerFrame =
 
 /** Frames the client sends up. */
 export type ClientFrame =
-  | { kind: 'start'; goal: string }
+  | { kind: 'start'; goal: string; mode?: 'live' | 'rehearsal' }
   | { kind: 'list-runs' }
   | { kind: 'load-run'; runId: string };
 

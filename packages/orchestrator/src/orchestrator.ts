@@ -83,7 +83,7 @@ export class Orchestrator {
     await teardown();
     await this.sandbox.init();
 
-    this.bus.emit({ type: 'run.started', goal, schemaVersion: 1 });
+    this.bus.emit({ type: 'run.started', goal, schemaVersion: 1, mode: 'live' });
 
     const roster = specs();
     for (const spec of Object.values(roster)) {
