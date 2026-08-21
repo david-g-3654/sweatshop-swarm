@@ -37,3 +37,19 @@ test('reads suite and deploy markers', () => {
   assert.equal(shippedUrl('done\nSHIPPED: https://example.trycloudflare.com'), 'https://example.trycloudflare.com');
   assert.equal(shippedUrl('FAILED: port in use'), null);
 });
+
+test('verdict markers survive the decoration models add to them', () => {
+  // Asking for a bare line reliably gets bold some of the time.
+  assert.equal(verdictOf('findings...\n\n**VERDICT: CHANGES_REQUESTED**'), 'changes');
+  assert.equal(verdictOf('`VERDICT: APPROVED`'), 'approved');
+  assert.equal(verdictOf('- VERDICT: APPROVED'), 'approved');
+  assert.equal(verdictOf('3. VERDICT: CHANGES_REQUESTED'), 'changes');
+  assert.equal(suiteOf('**SUITE: RED**'), 'red');
+  assert.equal(shippedUrl('**SHIPPED: https://a.trycloudflare.com**'), 'https://a.trycloudflare.com');
+});
+
+test('decoration tolerance does not loosen the line anchor', () => {
+  // The whole point of anchoring: musing about a verdict is not a verdict.
+  assert.equal(verdictOf('I would normally say VERDICT: APPROVED but not here'), null);
+  assert.equal(verdictOf('see the **VERDICT: APPROVED** convention in the docs for detail'), null);
+});

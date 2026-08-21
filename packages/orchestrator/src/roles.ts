@@ -194,7 +194,7 @@ export function specs(): Record<string, AgentSpec> {
       system: PLANNER_SYSTEM,
       tools: [],
       maxTurns: 2,
-      maxTokens: 8000,
+      maxTokens: 16000,
     },
     'engineer-a': {
       agentId: 'engineer-a',
@@ -228,8 +228,17 @@ export function specs(): Record<string, AgentSpec> {
       // one. read_file stays as an escape hatch it should rarely need.
       tools: ['read_file'],
       maxTurns: 8,
-      // Findings run long and that is the point; this only bounds a runaway.
-      maxTokens: 12000,
+      /*
+       * Generous on purpose. Thinking tokens count against max_tokens, and a
+       * Reviewer handed the whole workspace thinks hard about it — one run
+       * spent 14,000 characters reasoning and was cut off before it could
+       * write its verdict, which the pipeline then read as "no clear verdict"
+       * and turned into a rejection with nothing behind it.
+       *
+       * max_tokens is a ceiling, not a target. It does not make anything
+       * faster, so there is no reason to run it close.
+       */
+      maxTokens: 32000,
     },
     tester: {
       agentId: 'tester',
@@ -240,8 +249,8 @@ export function specs(): Record<string, AgentSpec> {
       system: TESTER_SYSTEM,
       tools: ['run_tests', 'read_file', 'list_files'],
       maxTurns: 6,
-      // Reports a pass/fail line. Anything longer is the model padding.
-      maxTokens: 2000,
+      // Reports a pass/fail line, but still has to think first.
+      maxTokens: 8000,
     },
     deployer: {
       agentId: 'deployer',
@@ -252,7 +261,7 @@ export function specs(): Record<string, AgentSpec> {
       system: DEPLOYER_SYSTEM,
       tools: ['read_file', 'deploy', 'http_check'],
       maxTurns: 6,
-      maxTokens: 2000,
+      maxTokens: 8000,
     },
   };
 }
@@ -283,19 +292,48 @@ export function parsePlan(text: string): Plan | null {
   return null;
 }
 
+/**
+ * Strip the decoration models put around a line they were told to write bare.
+ *
+ * Asking for "VERDICT: APPROVED alone on a line" reliably gets you
+ * `**VERDICT: APPROVED**` some of the time. Anchoring to the line start still
+ * matters — it is what stops a reviewer musing "I would normally say VERDICT:
+ * APPROVED, but" from shipping broken code — so the fix is to normalise the
+ * decoration, not to loosen the anchor.
+ */
+function markerLines(text: string): string[] {
+  return text.split('\n').map((line) =>
+    line
+      // A list marker, if the model numbered or bulleted the line.
+      .replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
+      // Emphasis at the ends only. Stripping these characters everywhere would
+      // eat the underscore in CHANGES_REQUESTED, which is the one word that has
+      // to survive intact.
+      .replace(/^[*_`~\s]+/, '')
+      .replace(/[*_`~\s]+$/, ''),
+  );
+}
+
+function hasMarker(text: string, pattern: RegExp): boolean {
+  return markerLines(text).some((line) => pattern.test(line));
+}
+
 export function verdictOf(text: string): 'approved' | 'changes' | null {
-  if (/^VERDICT:\s*APPROVED\s*$/im.test(text)) return 'approved';
-  if (/^VERDICT:\s*CHANGES_REQUESTED\s*$/im.test(text)) return 'changes';
+  if (hasMarker(text, /^VERDICT:\s*APPROVED$/i)) return 'approved';
+  if (hasMarker(text, /^VERDICT:\s*CHANGES_REQUESTED$/i)) return 'changes';
   return null;
 }
 
 export function suiteOf(text: string): 'green' | 'red' | null {
-  if (/^SUITE:\s*GREEN\s*$/im.test(text)) return 'green';
-  if (/^SUITE:\s*RED\s*$/im.test(text)) return 'red';
+  if (hasMarker(text, /^SUITE:\s*GREEN$/i)) return 'green';
+  if (hasMarker(text, /^SUITE:\s*RED$/i)) return 'red';
   return null;
 }
 
 export function shippedUrl(text: string): string | null {
-  const match = /^SHIPPED:\s*(\S+)\s*$/im.exec(text);
-  return match?.[1] ?? null;
+  for (const line of markerLines(text)) {
+    const match = /^SHIPPED:\s*(\S+)$/i.exec(line);
+    if (match?.[1]) return match[1];
+  }
+  return null;
 }

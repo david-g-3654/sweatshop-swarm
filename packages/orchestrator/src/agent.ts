@@ -28,7 +28,7 @@ export interface AgentResult {
   /** Everything the agent said, joined. The last block is usually its verdict. */
   text: string;
   turns: number;
-  stoppedBecause: 'end_turn' | 'max_turns' | 'refusal' | 'error';
+  stoppedBecause: 'end_turn' | 'max_turns' | 'refusal' | 'error' | 'truncated';
   filesTouched: string[];
   lastTests?: { passed: number; failed: number; ok: boolean };
 }
@@ -126,6 +126,26 @@ export class Agent {
             text: block.text.trim(),
           });
         }
+      }
+
+      /*
+       * A turn cut off at the output ceiling is not a finished turn.
+       *
+       * Left undetected it looks exactly like a completed one: the loop sees a
+       * stop_reason that is not 'tool_use', returns whatever text arrived, and
+       * the caller parses it. That is how a Reviewer that spent its whole
+       * budget thinking produced no verdict at all, and the pipeline reported a
+       * rejection with nothing behind it. Say so loudly instead.
+       */
+      if (final.stop_reason === 'max_tokens') {
+        this.status('blocked', 'cut off at the output limit');
+        this.bus.drama(
+          'warn',
+          `${this.spec.label} was cut off at its output limit before finishing. Its answer is incomplete.`,
+          this.spec.agentId,
+        );
+        stoppedBecause = 'truncated';
+        break;
       }
 
       if (final.stop_reason === 'refusal') {

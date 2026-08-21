@@ -44,6 +44,26 @@ Things that are easy to get wrong and are deliberately handled:
 - **Refusals are worded as instructions.** A refused tool call should cost a
   turn, not derail the run.
 
+### max_tokens includes thinking
+
+Reasoning is billed as output, so it counts against `max_tokens`. A budget that
+looks generous for an answer can be spent entirely on thinking, and the turn is
+then cut off before the answer is written.
+
+That is not a hypothetical. A Reviewer handed the whole workspace spent 14,000
+characters reasoning against a 12,000-token ceiling and emitted no text at all.
+Nothing errored — `stop_reason` was `max_tokens`, the loop saw a stop reason
+that was not `tool_use`, returned the empty text, and the pipeline reported
+"no clear verdict" and rejected the PR with nothing behind it.
+
+Two lessons, both now enforced in code:
+
+- **`max_tokens` is a ceiling, not a target.** It makes nothing faster, so
+  there is no reason to run it close. Trimming it is not a latency optimisation.
+- **A truncated turn must never look like a finished one.** The loop now checks
+  for `max_tokens` explicitly and says so in the drama feed, rather than
+  handing the caller a half-written answer to parse.
+
 ### Streaming and the inner monologue
 
 Adaptive thinking with `display: "summarized"` is doing double duty. It's the

@@ -305,7 +305,15 @@ export class Orchestrator {
       if (verdict === null) {
         // No verdict line means we cannot tell approval from musing. Treat an
         // unreadable review as a rejection: failing closed is the safe direction.
-        this.bus.drama('warn', 'Reviewer gave no clear verdict — treating it as changes requested.', 'reviewer');
+        // Distinguish the two reasons, though — "it ran out of room" and "it
+        // wrote something I could not parse" need different fixes.
+        this.bus.drama(
+          'warn',
+          result.stoppedBecause === 'truncated'
+            ? 'Reviewer ran out of output budget before reaching a verdict — treating it as changes requested.'
+            : 'Reviewer gave no clear verdict — treating it as changes requested.',
+          'reviewer',
+        );
       }
 
       const headline = firstFinding(result.text);
