@@ -9,17 +9,50 @@ import { PROVIDER, OPENROUTER_BASE_URL, FEATURES } from '../config.js';
  * provider story is these thirty lines.
  */
 
-export class MissingKeyError extends Error {}
+/** A problem with configuration, not with the model. Aborts a run immediately. */
+export class ConfigError extends Error {}
 
+const KEY_NAME = PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY';
+
+/**
+ * Fetch and sanity-check the API key.
+ *
+ * A key with a newline in it becomes an invalid HTTP header, and the resulting
+ * error talks about `Headers.append` rather than about the key — six times over,
+ * once per agent, while the run grinds on to a meaningless conclusion. Checking
+ * the shape up front turns that into one sentence naming the actual cause.
+ */
 function apiKey(): string {
-  const key = PROVIDER === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new MissingKeyError(
-      PROVIDER === 'openrouter'
-        ? 'OPENROUTER_API_KEY is not set. Put it in .env — never on the command line, where it lands in your shell history.'
-        : 'ANTHROPIC_API_KEY is not set. Copy .env.example to .env.',
+  const raw = PROVIDER === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.ANTHROPIC_API_KEY;
+
+  if (!raw || !raw.trim()) {
+    throw new ConfigError(
+      `${KEY_NAME} is not set. Put it in .env — not on the command line, where it lands in your shell history.`,
     );
   }
+
+  const key = raw.trim();
+
+  // The tell-tale signature of a broken shell paste: an unterminated quote in a
+  // .zshrc swallows the following lines into the value.
+  if (/\s/.test(key) || key.includes('export ')) {
+    throw new ConfigError(
+      `${KEY_NAME} contains whitespace or shell syntax, so it cannot be sent as an HTTP header.\n` +
+        `  This usually means it is exported in your shell from a paste with an unterminated quote.\n` +
+        `  Fix it with:   unset ${KEY_NAME}\n` +
+        `  then check ~/.zshrc for an export line whose quote is never closed.\n` +
+        `  The key in .env is used once nothing in the shell is overriding it.`,
+    );
+  }
+
+  const expectedPrefix = PROVIDER === 'openrouter' ? 'sk-or-' : 'sk-ant-';
+  if (!key.startsWith(expectedPrefix)) {
+    throw new ConfigError(
+      `${KEY_NAME} does not look like a ${PROVIDER} key (expected it to start with "${expectedPrefix}").\n` +
+        `  Set SWARM_PROVIDER explicitly if you meant to use the other provider.`,
+    );
+  }
+
   return key;
 }
 

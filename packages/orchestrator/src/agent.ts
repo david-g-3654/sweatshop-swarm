@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentStatus } from '@swarm/shared';
 import { LIMITS, PROVIDER } from './config.js';
-import { client, buildRequest } from './llm/client.js';
+import { client, buildRequest, ConfigError } from './llm/client.js';
 import type { UsageMeter } from './usage.js';
 import type { EventBus } from './bus.js';
 import { toolsFor, type Sandbox, type ToolExecution } from './tools/index.js';
@@ -95,6 +95,10 @@ export class Agent {
         final = await this.streamTurn(tools);
       } catch (err) {
         this.status('failed', describeError(err));
+        // A bad key or an unusable config will fail identically for every other
+        // agent. Rethrowing aborts the run instead of emitting the same error
+        // six times and grinding on to a meaningless verdict.
+        if (isFatalConfig(err)) throw err;
         this.bus.drama('bad', `${this.spec.label} hit an API error: ${describeError(err)}`, this.spec.agentId);
         return {
           ok: false,
@@ -223,6 +227,11 @@ export class Agent {
     for (const change of execution.fileChanges ?? []) this.filesTouched.add(change.path);
     return { use, execution };
   }
+}
+
+/** Errors that no amount of retrying, by anyone, will get past. */
+export function isFatalConfig(err: unknown): boolean {
+  return err instanceof ConfigError || err instanceof Anthropic.AuthenticationError;
 }
 
 export function describeError(err: unknown): string {

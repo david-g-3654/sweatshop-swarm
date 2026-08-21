@@ -189,6 +189,24 @@ three turns, the first wrote 2235 tokens and the next two read them back while
 writing only ~40 tokens of delta each. Cache writes cost 1.25x and reads 0.1x,
 so it pays for itself from the second turn on.
 
+## Secrets
+
+Provider errors quote the request that caused them, and that request carries the
+Authorization header. So a bad key produced an error containing the key, and
+that string flowed into a drama event, onto the screen, and into the recorded
+run JSON — the file you would hand someone to show off a run.
+
+Redaction therefore happens in `EventBus.emit`, not at the call sites. Every
+observable string passes through that one function, so scrubbing there is a
+property of the system rather than a rule everyone has to remember. Known live
+key values are replaced first, before the pattern rules, because a partial
+pattern match can otherwise cut a mangled key in half and let the remainder
+through.
+
+Credentials are also shape-checked at startup, and a key that cannot be sent as
+an HTTP header aborts the run immediately instead of failing identically for
+each of six agents.
+
 ## The sandbox
 
 Agents get a directory and an allowlist. Paths that escape the root are

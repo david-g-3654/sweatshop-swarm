@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SwarmEvent, RecordedRun } from '@swarm/shared';
 import { EVENT_SCHEMA_VERSION } from '@swarm/shared';
+import { redactDeep } from './redact.js';
 
 /**
  * An event as emitted by the orchestrator, before the bus stamps it.
@@ -37,8 +38,11 @@ export class EventBus {
   ) {}
 
   emit(event: EmittedEvent): SwarmEvent {
+    // Redact here, not at the call sites. Every observable string — the live
+    // feed, the recording on disk, the console — passes through this one
+    // function, so a secret scrubbed here cannot reach any of them.
     const stamped = {
-      ...event,
+      ...redactDeep(event),
       id: randomUUID(),
       seq: this.seq++,
       ts: event.ts ?? Date.now(),

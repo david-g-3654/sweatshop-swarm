@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Phase } from '@swarm/shared';
 import { SANDBOX_ROOT, LIMITS } from './config.js';
 import { EventBus } from './bus.js';
-import { Agent } from './agent.js';
+import { Agent, isFatalConfig, describeError } from './agent.js';
 import { Sandbox } from './tools/index.js';
 import { teardown } from './tools/deploy.js';
 import { specs, parsePlan, verdictOf, suiteOf, shippedUrl, type Plan } from './roles.js';
@@ -108,7 +108,13 @@ export class Orchestrator {
 
       return this.finish(true, `Shipped: ${url}`, url);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
+      if (isFatalConfig(err)) {
+        // Configuration, not the models. Say so plainly and stop — there is
+        // nothing for the rest of the team to attempt.
+        this.bus.drama('bad', `Stopped before doing any work: ${message}`);
+        return this.finish(false, message);
+      }
       this.bus.drama('bad', `The run fell over: ${message}`);
       return this.finish(false, message);
     }
