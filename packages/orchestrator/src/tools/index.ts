@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { LIMITS } from '../config.js';
+import { LIMITS, FEATURES } from '../config.js';
 import { Sandbox, isAllowedCommand, runCommand } from './sandbox.js';
 import { deployTool, httpCheckTool } from './deploy.js';
 
@@ -192,12 +192,21 @@ export const ALL_TOOLS: Record<string, ToolImpl> = {
   http_check: httpCheckTool,
 };
 
-/** Build the tool array for one role from its whitelist. */
+/**
+ * Build the tool array for one role from its whitelist.
+ *
+ * `strict` is dropped when the provider does not accept it. The schemas stay
+ * exactly as they are either way — without strict the API stops guaranteeing
+ * the input validates, so the tools' own defensive checks carry that weight
+ * instead. They were written to do that regardless.
+ */
 export function toolsFor(names: readonly string[]): Anthropic.Tool[] {
   return names.map((name) => {
     const impl = ALL_TOOLS[name];
     if (!impl) throw new Error(`unknown tool in whitelist: ${name}`);
-    return impl.definition;
+    if (FEATURES.strictTools) return impl.definition;
+    const { strict: _dropped, ...rest } = impl.definition as Anthropic.Tool & { strict?: boolean };
+    return rest as Anthropic.Tool;
   });
 }
 

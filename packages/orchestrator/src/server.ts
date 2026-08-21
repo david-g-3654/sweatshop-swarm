@@ -1,11 +1,12 @@
 import http from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ArenaEvent, ClientFrame, ServerFrame } from '@arena/shared';
-import { PORTS } from './config.js';
+import { PORTS, PROVIDER } from './config.js';
 import { Orchestrator } from './orchestrator.js';
 import { Rehearsal } from './rehearsal.js';
 import { teardown } from './tools/deploy.js';
 import * as recorder from './recorder.js';
+import { hasKey } from './llm/client.js';
 
 /**
  * The server the mission-control UI talks to.
@@ -124,8 +125,10 @@ wss.on('connection', async (socket) => {
 
 server.listen(PORTS.ws, () => {
   console.log(`[arena] mission control feed on ws://localhost:${PORTS.ws}`);
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[arena] ANTHROPIC_API_KEY is not set — live runs will fail. Copy .env.example to .env.');
+  console.log(`[arena] provider: ${PROVIDER}`);
+  if (!hasKey()) {
+    const key = PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY';
+    console.warn(`[arena] ${key} is not set — live runs will fail, but Rehearse still works.`);
   }
 });
 

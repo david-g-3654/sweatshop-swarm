@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p packages/orchestrator",
     "rehearse": "npm --workspace @arena/orchestrator run rehearse",
     "server": "npm --workspace @arena/orchestrator run start",
-    "test": "npm --workspace @arena/orchestrator run test"
+    "test": "npm --workspace @arena/orchestrator run test",
+    "probe": "npm --workspace @arena/orchestrator run probe"
   },
   "engines": {
     "node": ">=20"

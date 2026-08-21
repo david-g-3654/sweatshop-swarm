@@ -8,7 +8,8 @@
     "start": "tsx src/server.ts",
     "test": "tsx --test test/*.test.ts",
     "rehearse": "tsx src/cli.ts --rehearse",
-    "arena": "tsx src/cli.ts"
+    "arena": "tsx src/cli.ts",
+    "probe": "tsx src/probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

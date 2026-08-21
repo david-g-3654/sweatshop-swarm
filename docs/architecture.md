@@ -83,6 +83,43 @@ Three gates, three deliberate failure directions:
 | Tester says `SUITE: GREEN` but `run_tests` returned failures | **Red** | The tool result wins. A cheerful summary doesn't get to ship a red suite. |
 | Planner returns unparseable JSON | Fall back to the default split, and **say so** in the drama feed | Visibly degrading beats a blank screen on stage. |
 
+## Providers
+
+OpenRouter serves the **Anthropic Messages API**, not just an OpenAI-compatible
+one, so switching providers is a base URL and a key — the agent loop, the tool
+definitions and the streaming are untouched. `packages/orchestrator/src/llm/`
+is the whole of it.
+
+Two things that bite:
+
+1. **The base URL is `https://openrouter.ai/api`, not `.../api/v1`.** The SDK
+   appends `/v1/messages` itself; getting this wrong yields a 404 HTML page
+   whose error message tells you nothing.
+2. **Model ids are namespaced** — `anthropic/claude-sonnet-5`. Applied
+   automatically when the provider is OpenRouter.
+
+### Capability probing
+
+A gateway may not accept every optional parameter (`thinking`,
+`output_config.effort`, `strict` tools, `cache_control`), and a rejected
+parameter is a 400 that kills the run instead of degrading it.
+
+So each is a feature flag, defaulting off on OpenRouter and on for the direct
+API, and `npm run probe` establishes the truth empirically — one small request
+per feature — then prints the matching `.env`. Losing any of them costs polish,
+not correctness; the consequences are documented in `config.ts` next to the
+flags.
+
+## Cost
+
+`src/usage.ts` accumulates token usage per run and prices it, including the
+1.25x cache-write and 0.1x cache-read multipliers. Reported in the flight loop
+at the end of every run, successful or not.
+
+It is an estimate from a local price table — the authoritative number is the
+provider's dashboard — and a model with no price on file makes the figure a
+stated floor rather than silently reading as zero.
+
 ## The sandbox
 
 Agents get a directory and an allowlist. Paths that escape the root are

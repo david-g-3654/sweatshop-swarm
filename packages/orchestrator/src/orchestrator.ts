@@ -7,6 +7,7 @@ import { Agent } from './agent.js';
 import { Sandbox } from './tools/index.js';
 import { teardown } from './tools/deploy.js';
 import { specs, parsePlan, verdictOf, suiteOf, shippedUrl, type Plan } from './roles.js';
+import { UsageMeter } from './usage.js';
 
 export interface RunOptions {
   goal: string;
@@ -50,6 +51,7 @@ function fallbackPlan(goal: string): Plan {
 
 export class Orchestrator {
   readonly bus: EventBus;
+  readonly meter = new UsageMeter();
   private readonly sandbox: Sandbox;
   private agents = new Map<string, Agent>();
 
@@ -87,7 +89,7 @@ export class Orchestrator {
 
     const roster = specs();
     for (const spec of Object.values(roster)) {
-      const agent = new Agent(spec, this.bus, this.sandbox);
+      const agent = new Agent(spec, this.bus, this.sandbox, this.meter);
       this.agents.set(spec.agentId, agent);
       agent.announce();
     }
@@ -113,6 +115,9 @@ export class Orchestrator {
   }
 
   private finish(ok: boolean, summary: string, deployUrl?: string): RunOutcome {
+    // Report the bill even on a failed run — a run that burned budget and shipped
+    // nothing is exactly the one you want the number for.
+    this.bus.drama(ok ? 'info' : 'warn', this.meter.summary());
     this.phase(ok ? 'done' : 'failed');
     this.bus.emit({
       type: 'run.finished',

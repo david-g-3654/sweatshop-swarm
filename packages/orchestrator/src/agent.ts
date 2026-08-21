@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentStatus } from '@arena/shared';
-import { LIMITS } from './config.js';
+import { LIMITS, PROVIDER } from './config.js';
+import { client, buildRequest } from './llm/client.js';
+import type { UsageMeter } from './usage.js';
 import type { EventBus } from './bus.js';
 import { toolsFor, type Sandbox, type ToolExecution } from './tools/index.js';
 import { executeToolWithEvents } from './tools/execute.js';
@@ -29,8 +31,6 @@ export interface AgentResult {
   lastTests?: { passed: number; failed: number; ok: boolean };
 }
 
-const client = new Anthropic();
-
 /**
  * One agent: a role, a system prompt, a tool whitelist, and a loop.
  *
@@ -50,6 +50,7 @@ export class Agent {
     private readonly spec: AgentSpec,
     private readonly bus: EventBus,
     private readonly sandbox: Sandbox,
+    private readonly meter?: UsageMeter,
   ) {}
 
   get id(): string {
@@ -185,17 +186,15 @@ export class Agent {
 
   /** One streamed API call. Tokens go straight to the browser as they arrive. */
   private async streamTurn(tools: Anthropic.Tool[]): Promise<Anthropic.Message> {
-    const stream = client.messages.stream({
-      model: this.spec.model,
-      max_tokens: 16000,
-      // Adaptive thinking with a visible summary: this is what fills the
-      // "inner monologue" panel. It is real reasoning, not a paraphrase.
-      thinking: { type: 'adaptive', display: 'summarized' },
-      output_config: { effort: this.spec.effort },
-      system: [{ type: 'text', text: this.spec.system, cache_control: { type: 'ephemeral' } }],
-      messages: this.messages,
-      tools,
-    });
+    const stream = client().messages.stream(
+      buildRequest({
+        model: this.spec.model,
+        system: this.spec.system,
+        messages: this.messages,
+        tools,
+        effort: this.spec.effort,
+      }),
+    );
 
     const turn = this.turnCount;
     stream.on('thinking', (delta) => {
@@ -205,7 +204,9 @@ export class Agent {
       this.bus.emit({ type: 'agent.token', agentId: this.spec.agentId, turn, text: delta });
     });
 
-    return stream.finalMessage();
+    const message = await stream.finalMessage();
+    this.meter?.record(this.spec.model, message.usage);
+    return message;
   }
 
   private async executeTool(
@@ -225,9 +226,17 @@ export class Agent {
 }
 
 export function describeError(err: unknown): string {
+  const keyName = PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY';
   if (err instanceof Anthropic.RateLimitError) return 'rate limited';
-  if (err instanceof Anthropic.AuthenticationError) return 'bad or missing ANTHROPIC_API_KEY';
+  if (err instanceof Anthropic.AuthenticationError) return `bad or missing ${keyName}`;
   if (err instanceof Anthropic.APIConnectionError) return 'connection failed';
-  if (err instanceof Anthropic.APIError) return `API ${err.status}: ${err.message}`;
+  if (err instanceof Anthropic.APIError) {
+    // A 400 from a gateway is usually a parameter it will not accept. Say so,
+    // because the fix is a feature flag and not a code change.
+    if (err.status === 400 && PROVIDER === 'openrouter') {
+      return `API 400 (OpenRouter rejected a request parameter — run "npm run probe"): ${err.message}`;
+    }
+    return `API ${err.status}: ${err.message}`;
+  }
   return err instanceof Error ? err.message : String(err);
 }

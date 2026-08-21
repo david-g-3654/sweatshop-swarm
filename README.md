@@ -21,6 +21,7 @@ The graph isn't decoration — it's the product. This is agentic AI made legible
 | **Orchestration** | Hand-rolled. ~400 lines of TypeScript, no LangGraph, no CrewAI. |
 | **Agents** | A role, a system prompt, a tool whitelist, and a loop. That's it. |
 | **Models** | Claude Opus 5 plans. Claude Sonnet 5 does the work. |
+| **Providers** | Anthropic directly, or OpenRouter — which serves the same Messages API, so it's a base-URL swap, not a second code path. |
 | **Tools** | `write_file`, `read_file`, `list_files`, `run_command`, `run_tests`, `deploy`, `http_check` — all sandboxed. |
 | **Transport** | Every agent action is an event on a WebSocket. The event schema is the contract. |
 | **UI** | React + React Flow, driven entirely by that event stream. |
@@ -54,8 +55,22 @@ branch on. That's why the scrubber is honest to put on a projector.
 
 ```bash
 npm install
-cp .env.example .env   # add your ANTHROPIC_API_KEY
+cp .env.example .env
 ```
+
+Put **one** key in `.env` — `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY`. The
+provider is detected from whichever is there.
+
+Then find out what your provider actually supports:
+
+```bash
+npm run probe
+```
+
+A gateway isn't obliged to accept every parameter the first-party API takes, and
+a rejected parameter is a 400 that kills a run rather than degrading it. So the
+probe sends one tiny request per feature, reports what came back, and prints the
+`.env` lines that match reality. Costs a fraction of a cent.
 
 Two processes:
 
@@ -68,6 +83,19 @@ npm --workspace @arena/web run dev
 ```
 
 Open <http://localhost:5250>, type a goal, press **Run live**.
+
+### What a run costs
+
+Every run reports its own bill in the flight loop — *"Run cost about $0.38 —
+294k in, 21k out, 180k served from cache"* — including failed runs, since those
+are the ones you most want the number for.
+
+Rough guide on the default models (Opus 5 planning, Sonnet 5 working), for
+budgeting: **well under a dollar per run**, and prompt caching cuts the repeated
+system prompts substantially. To stretch a small budget further, put Sonnet on
+the Planner too, or drop the workers to Haiku 4.5 — see `.env.example`.
+
+Rehearsal mode costs nothing, so iterate on the UI with that.
 
 ### Without an API key
 
