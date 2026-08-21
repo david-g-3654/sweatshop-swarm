@@ -9,7 +9,7 @@
     "packages/web"
   ],
   "scripts": {
-    "typecheck": "tsc -b packages/shared packages/orchestrator"
+    "typecheck": "tsc --noEmit -p packages/orchestrator"
   },
   "engines": {
     "node": ">=20"
