@@ -83,6 +83,63 @@ Three gates, three deliberate failure directions:
 | Tester says `SUITE: GREEN` but `run_tests` returned failures | **Red** | The tool result wins. A cheerful summary doesn't get to ship a red suite. |
 | Planner returns unparseable JSON | Fall back to the default split, and **say so** in the drama feed | Visibly degrading beats a blank screen on stage. |
 
+## The wire
+
+`packages/shared/src/protocol.ts` is the only thing both sides import, so the
+compiler catches a mismatch rather than the demo doing it.
+
+Server frames:
+
+| Frame | When |
+|---|---|
+| `snapshot` | On connect, and again whenever a run starts or a recording is loaded. Carries the full event array. |
+| `event` | One appended event. |
+| `runs` | The list of recordings on disk. |
+| `error` | Something the operator needs to see. |
+
+Client frames are `start`, `list-runs`, `load-run`. That is the entire API.
+
+A client that connects mid-run gets a `snapshot` of everything so far and then
+joins the live `event` stream, which lands it in exactly the state a client
+that was there from the beginning is in — because both did nothing but fold the
+same events through the same reducer.
+
+Only one run happens at a time, deliberately. Two would fight over the app port
+and the sandbox, and there is one projector.
+
+## The frontend
+
+`packages/web/src/store.ts` holds the whole idea:
+
+```
+events: ArenaEvent[]        the log, append-only
+cursor: number              how many of them are applied
+derived: ArenaState         reduceEvents(events, cursor)
+```
+
+Scrubbing sets `cursor`. Following live keeps it pinned to `events.length`.
+Nothing else changes, and no component knows which of those is happening.
+
+Two details worth keeping:
+
+- **Live extends, scrubbing rebuilds.** A new event while following applies to
+  a clone of the current state; moving the cursor re-folds from zero. Same
+  function, and the rebuild is a few milliseconds over hundreds of events.
+- **The roster is seeded before any run starts**, so the graph renders its six
+  stations greyed out rather than popping them in mid-demo.
+
+### Why the visual language is what it is
+
+The brief is not "dashboard", it is "broadcast": read from fifteen metres, for
+three minutes, by a room. So the reference is a flight director's console, and
+the mapping is structural rather than decorative — agents are console positions,
+a review verdict genuinely is a GO/NO-GO gate, the drama feed is the flight
+loop, the run clock is mission elapsed time.
+
+Status colours are the only colours besides the amber, so anything coloured
+means something. The one piece of choreography is the GO/NO-GO band, because
+the review verdict is the one moment the audience must not miss.
+
 ## Providers
 
 OpenRouter serves the **Anthropic Messages API**, not just an OpenAI-compatible
@@ -147,6 +204,16 @@ process and printing a link is not a deploy.
 Backends: `tunnel` (cloudflared quick tunnel → public https in ~2s, falls back
 to localhost loudly), `local`, and `fly` as a named plan B. Fly isn't the
 default because a 1–3 minute deploy doesn't fit inside a 3 minute pitch.
+
+## Recording
+
+`src/recorder.ts` writes `runs/<runId>.json` when a run ends — the event log
+plus enough header to list it. The filename must equal the `runId` inside it;
+that is how the loader finds it, and run ids coming off the wire are pattern
+checked before they touch the filesystem.
+
+There is no separate "recorded run" format, because a recording is just the
+array the UI was already consuming.
 
 ## Rehearsal mode
 

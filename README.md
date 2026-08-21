@@ -18,7 +18,7 @@ The graph isn't decoration — it's the product. This is agentic AI made legible
 
 | | |
 |---|---|
-| **Orchestration** | Hand-rolled. ~400 lines of TypeScript, no LangGraph, no CrewAI. |
+| **Orchestration** | Hand-rolled. No LangGraph, no CrewAI. ~780 lines: the agent loop (195), the pipeline (236), the role prompts (205), the provider layer (79), the event bus (61). |
 | **Agents** | A role, a system prompt, a tool whitelist, and a loop. That's it. |
 | **Models** | Claude Opus 5 plans. Claude Sonnet 5 does the work. |
 | **Providers** | Anthropic directly, or OpenRouter — which serves the same Messages API, so it's a base-URL swap, not a second code path. |
@@ -39,6 +39,36 @@ genuinely finds them.
 Nothing forces a rejection. If an Engineer writes something airtight first time,
 it gets approved and the demo is shorter. Rigging the verdict would make this a
 puppet show instead of a system.
+
+Here is what it actually caught on a live run — after running the suite itself
+and watching **29 of 29 tests pass**:
+
+> `store.js`, `addLink`: the custom-code validation only ever runs
+> `/^[A-Za-z0-9_-]{1,32}$/.test(code)` against `opts.code` without first
+> checking `typeof code === 'string'`. Because `RegExp.prototype.test` coerces
+> its argument to a string, non-string inputs sneak through validation when
+> their string form happens to match the pattern: `code: null` stringifies to
+> `"null"` (passes, gets stored, and echoed back to the caller).
+>
+> **VERDICT: CHANGES_REQUESTED**
+
+A green suite, a real type-coercion bug, and a reviewer that blocked the merge
+anyway. Nobody scripted that.
+
+### It has actually done this
+
+A full live run, end to end, against OpenRouter:
+
+| | |
+|---|---|
+| Duration | **5.9 min** — 55s planning, 1m56s building, 2m47s review, 5s tests, 13s deploy |
+| Outcome | Rejected on round 1, fixed, approved on round 2 |
+| Tests | Went red mid-run (13 passed / 3 failed), ended **30 passing** |
+| Deploy | Health check returned `200 {"ok":true}` |
+| Events | 530 |
+
+Review is the longest phase, which is the right shape for the thing being
+demonstrated.
 
 ### Replay is not a video
 
@@ -83,6 +113,26 @@ npm --workspace @arena/web run dev
 ```
 
 Open <http://localhost:5250>, type a goal, press **Run live**.
+
+### Commands
+
+| | |
+|---|---|
+| `npm run server` | The orchestrator and the WebSocket feed. |
+| `npm run probe` | Ask your provider which features it really supports. |
+| `npm run rehearse` | Full pipeline, scripted dialogue, no API calls. |
+| `npm run arena` | One live run, headless. `-- --goal "..."` to set the goal. |
+| `npm test` | Unit tests for the sandbox, parsers and cost meter. |
+| `npm run typecheck` | |
+
+Both CLI runners tear the deployment down when they exit. Pass `--keep-alive`
+to leave the URL serving afterwards:
+
+```bash
+npm run arena -- --keep-alive --goal "Build and deploy a paste bin."
+```
+
+The UI's **Run live** button leaves it up regardless.
 
 ### What a run costs
 
