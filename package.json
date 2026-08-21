@@ -1,5 +1,5 @@
 {
-  "name": "agent-arena",
+  "name": "sweatshop-swarm",
   "private": true,
   "version": "0.1.0",
   "description": "Watch a software team of AI agents ship a feature live.",
@@ -10,11 +10,11 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p packages/orchestrator",
-    "rehearse": "npm --workspace @arena/orchestrator run rehearse",
-    "server": "npm --workspace @arena/orchestrator run start",
-    "test": "npm --workspace @arena/orchestrator run test",
-    "probe": "npm --workspace @arena/orchestrator run probe",
-    "arena": "npm --workspace @arena/orchestrator run arena --"
+    "rehearse": "npm --workspace @swarm/orchestrator run rehearse",
+    "server": "npm --workspace @swarm/orchestrator run start",
+    "test": "npm --workspace @swarm/orchestrator run test",
+    "probe": "npm --workspace @swarm/orchestrator run probe",
+    "swarm": "npm --workspace @swarm/orchestrator run swarm --"
   },
   "engines": {
     "node": ">=20"

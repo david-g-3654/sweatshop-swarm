@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useArena } from '../store';
+import { useSwarm } from '../store';
 import { met } from '../time';
 
 /**
@@ -11,7 +11,7 @@ import { met } from '../time';
  * be true — same events, same order, same durations, same reducer.
  */
 export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | 'rehearsal') => void }) {
-  const { events, cursor, scrubbing, setCursor, follow, derived, runs } = useArena();
+  const { events, cursor, scrubbing, setCursor, follow, derived, runs } = useSwarm();
   const [goal, setGoal] = useState('Build and deploy a working URL shortener with click analytics.');
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | null>(null);
@@ -40,8 +40,8 @@ export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | '
 
   const loadRun = (runId: string) => {
     stop();
-    useArena.setState({ error: null });
-    window.dispatchEvent(new CustomEvent('arena:load-run', { detail: runId }));
+    useSwarm.setState({ error: null });
+    window.dispatchEvent(new CustomEvent('swarm:load-run', { detail: runId }));
   };
 
   return (

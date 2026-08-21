@@ -1,10 +1,10 @@
-import type { ArenaEvent, RecordedRun } from './events.js';
+import type { SwarmEvent, RecordedRun } from './events.js';
 
 /** Frames the server sends down the socket. */
 export type ServerFrame =
   /** Sent immediately on connect: everything that has happened so far. */
-  | { kind: 'snapshot'; runId: string | null; goal: string | null; events: ArenaEvent[] }
-  | { kind: 'event'; event: ArenaEvent }
+  | { kind: 'snapshot'; runId: string | null; goal: string | null; events: SwarmEvent[] }
+  | { kind: 'event'; event: SwarmEvent }
   | { kind: 'runs'; runs: RunSummary[] }
   | { kind: 'error'; message: string };
 

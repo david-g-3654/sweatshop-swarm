@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ROSTER } from '@arena/shared';
-import type { ArenaState } from '../store';
+import { ROSTER } from '@swarm/shared';
+import type { SwarmState } from '../store';
 
 /**
  * One station's console: what that agent is saying, as it says it.
@@ -9,7 +9,7 @@ import type { ArenaState } from '../store';
  * nobody is clicking tabs. It stops following the moment you pick one
  * yourself — the operator always outranks the autopilot.
  */
-export function ConsolePanel({ state }: { state: ArenaState }) {
+export function ConsolePanel({ state }: { state: SwarmState }) {
   const [pinned, setPinned] = useState<string | null>(null);
   const body = useRef<HTMLDivElement>(null);
 

@@ -1,4 +1,4 @@
-# Agent Arena
+# Sweatshop Swarm
 
 **Watch a software team ship a feature live.**
 
@@ -109,7 +109,7 @@ npm run server
 ```
 
 ```bash
-npm --workspace @arena/web run dev
+npm --workspace @swarm/web run dev
 ```
 
 Open <http://localhost:5250>, type a goal, press **Run live**.
@@ -121,7 +121,7 @@ Open <http://localhost:5250>, type a goal, press **Run live**.
 | `npm run server` | The orchestrator and the WebSocket feed. |
 | `npm run probe` | Ask your provider which features it really supports. |
 | `npm run rehearse` | Full pipeline, scripted dialogue, no API calls. |
-| `npm run arena` | One live run, headless. `-- --goal "..."` to set the goal. |
+| `npm run swarm` | One live run, headless. `-- --goal "..."` to set the goal. |
 | `npm test` | Unit tests for the sandbox, parsers and cost meter. |
 | `npm run typecheck` | |
 
@@ -129,7 +129,7 @@ Both CLI runners tear the deployment down when they exit. Pass `--keep-alive`
 to leave the URL serving afterwards:
 
 ```bash
-npm run arena -- --keep-alive --goal "Build and deploy a paste bin."
+npm run swarm -- --keep-alive --goal "Build and deploy a paste bin."
 ```
 
 The UI's **Run live** button leaves it up regardless.
@@ -158,7 +158,7 @@ Budget from your own number, not this one — the flight loop prints the run's
 actual cost every time.
 
 To stretch a small balance further: put Sonnet on the Planner too, or drop the
-workers to Haiku 4.5 (see `.env.example`), and lower `ARENA_MAX_TURNS`.
+workers to Haiku 4.5 (see `.env.example`), and lower `SWARM_MAX_TURNS`.
 
 **Rehearsal mode costs nothing**, so iterate on the UI with that and spend
 credit only on real rehearsals.

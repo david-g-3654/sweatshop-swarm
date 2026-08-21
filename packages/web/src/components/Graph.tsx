@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { ReactFlow, Background, BackgroundVariant, type Edge, type Node } from '@xyflow/react';
-import { ROSTER } from '@arena/shared';
+import { ROSTER } from '@swarm/shared';
 import { StationNode } from './StationNode';
-import type { ArenaState } from '../store';
+import type { SwarmState } from '../store';
 
 const NODE_TYPES = { station: StationNode };
 
@@ -36,7 +36,7 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
  */
 const HOT_WINDOW_MS = 9000;
 
-export function Graph({ state }: { state: ArenaState }) {
+export function Graph({ state }: { state: SwarmState }) {
   const nodes = useMemo<Node[]>(
     () =>
       ROSTER.map((spec) => ({

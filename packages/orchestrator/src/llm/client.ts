@@ -35,7 +35,7 @@ export function client(): Anthropic {
           // OpenRouter uses these for attribution on its public leaderboards.
           defaultHeaders: {
             'HTTP-Referer': 'https://github.com/david-g-3654/sweatshop-swarm',
-            'X-Title': 'Agent Arena',
+            'X-Title': 'Sweatshop Swarm',
           },
         }
       : {}),

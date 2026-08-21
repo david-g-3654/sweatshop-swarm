@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { AgentStatus, ArenaEvent, Phase, RunSummary, ServerFrame } from '@arena/shared';
-import { ROSTER } from '@arena/shared';
+import type { AgentStatus, SwarmEvent, Phase, RunSummary, ServerFrame } from '@swarm/shared';
+import { ROSTER } from '@swarm/shared';
 
 /**
  * All view state is derived from the event log by a pure function.
@@ -53,7 +53,7 @@ export interface Handoff {
   seq: number;
 }
 
-export interface ArenaState {
+export interface SwarmState {
   runId: string | null;
   goal: string | null;
   mode: 'live' | 'rehearsal' | null;
@@ -84,7 +84,7 @@ function blankAgent(agentId: string, label: string, role: string): AgentView {
   };
 }
 
-export function initialState(): ArenaState {
+export function initialState(): SwarmState {
   // Seed the roster so the graph renders its stations before a run starts,
   // instead of nodes popping into existence mid-demo.
   const agents: Record<string, AgentView> = {};
@@ -109,7 +109,7 @@ export function initialState(): ArenaState {
 }
 
 /** Apply one event. Mutates the draft; callers always pass a fresh draft. */
-function apply(state: ArenaState, event: ArenaEvent): void {
+function apply(state: SwarmState, event: SwarmEvent): void {
   state.now = event.ts;
 
   switch (event.type) {
@@ -226,7 +226,7 @@ function apply(state: ArenaState, event: ArenaEvent): void {
   }
 }
 
-export function reduceEvents(events: ArenaEvent[], upTo: number): ArenaState {
+export function reduceEvents(events: SwarmEvent[], upTo: number): SwarmState {
   const state = initialState();
   const end = Math.min(upTo, events.length);
   for (let i = 0; i < end; i++) apply(state, events[i]!);
@@ -237,14 +237,14 @@ export function reduceEvents(events: ArenaEvent[], upTo: number): ArenaState {
 
 interface Store {
   connected: boolean;
-  events: ArenaEvent[];
+  events: SwarmEvent[];
   /** How many events are applied. Equals events.length when following live. */
   cursor: number;
   /** True while the user is scrubbing; new events stop advancing the cursor. */
   scrubbing: boolean;
   runs: RunSummary[];
   error: string | null;
-  derived: ArenaState;
+  derived: SwarmState;
 
   setConnected(connected: boolean): void;
   ingest(frame: ServerFrame): void;
@@ -252,7 +252,7 @@ interface Store {
   follow(): void;
 }
 
-export const useArena = create<Store>((set, get) => ({
+export const useSwarm = create<Store>((set, get) => ({
   connected: false,
   events: [],
   cursor: 0,
@@ -283,7 +283,7 @@ export const useArena = create<Store>((set, get) => ({
         return;
       }
       // Following live: extend the derived state rather than rebuilding it.
-      const draft: ArenaState = structuredClone(derived);
+      const draft: SwarmState = structuredClone(derived);
       apply(draft, frame.event);
       set({ events: next, cursor: cursor + 1, derived: draft });
       return;

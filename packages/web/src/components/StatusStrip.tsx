@@ -1,5 +1,5 @@
-import { PHASE_ORDER } from '@arena/shared';
-import type { ArenaState } from '../store';
+import { PHASE_ORDER } from '@swarm/shared';
+import type { SwarmState } from '../store';
 import { met } from '../time';
 
 const PHASE_LABEL: Record<string, string> = {
@@ -10,7 +10,7 @@ const PHASE_LABEL: Record<string, string> = {
   deploying: 'deploy',
 };
 
-export function StatusStrip({ state, connected }: { state: ArenaState; connected: boolean }) {
+export function StatusStrip({ state, connected }: { state: SwarmState; connected: boolean }) {
   const currentIndex = state.phase ? PHASE_ORDER.indexOf(state.phase) : -1;
 
   const badge = !connected
@@ -27,7 +27,7 @@ export function StatusStrip({ state, connected }: { state: ArenaState; connected
         <span className="met" aria-label="mission elapsed time">
           {met(state.startedAt, state.now)}
         </span>
-        <span className="wordmark">Agent Arena</span>
+        <span className="wordmark">Sweatshop Swarm</span>
 
         <span className="goal">
           {state.goal ? <b>{state.goal}</b> : 'No run loaded.'}

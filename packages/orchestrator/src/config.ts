@@ -29,7 +29,7 @@ export const RUNS_DIR = path.join(REPO_ROOT, 'runs');
  * base URL, the key and the model naming change. Auto-detected from whichever
  * key is present so there is one less thing to get wrong at 2am.
  */
-export const PROVIDER = (process.env.ARENA_PROVIDER ??
+export const PROVIDER = (process.env.SWARM_PROVIDER ??
   (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'anthropic')) as 'openrouter' | 'anthropic';
 
 /**
@@ -46,9 +46,9 @@ function qualify(model: string): string {
 
 export const MODELS = {
   /** The Planner does the hard reasoning: decomposition, and re-planning on failure. */
-  planner: process.env.ARENA_PLANNER_MODEL ?? qualify('claude-opus-5'),
+  planner: process.env.SWARM_PLANNER_MODEL ?? qualify('claude-opus-5'),
   /** Workers. Cheaper and faster, which matters when six agents run in one demo. */
-  worker: process.env.ARENA_WORKER_MODEL ?? qualify('claude-sonnet-5'),
+  worker: process.env.SWARM_WORKER_MODEL ?? qualify('claude-sonnet-5'),
 } as const;
 
 /**
@@ -77,10 +77,10 @@ function feature(name: string, defaultOn: boolean): boolean {
 const RICH = PROVIDER === 'anthropic';
 
 export const FEATURES = {
-  thinking: feature('ARENA_THINKING', RICH),
-  effort: feature('ARENA_EFFORT', RICH),
-  strictTools: feature('ARENA_STRICT_TOOLS', RICH),
-  promptCache: feature('ARENA_PROMPT_CACHE', true),
+  thinking: feature('SWARM_THINKING', RICH),
+  effort: feature('SWARM_EFFORT', RICH),
+  strictTools: feature('SWARM_STRICT_TOOLS', RICH),
+  promptCache: feature('SWARM_PROMPT_CACHE', true),
 } as const;
 
 /**
@@ -100,17 +100,17 @@ export const EFFORT = {
 
 /** Hard ceilings. An agent that hits its cap is failed, not left to wander. */
 export const LIMITS = {
-  maxTurnsPerAgent: Number(process.env.ARENA_MAX_TURNS ?? 14),
-  maxReviewRounds: Number(process.env.ARENA_MAX_REVIEW_ROUNDS ?? 3),
-  commandTimeoutMs: Number(process.env.ARENA_CMD_TIMEOUT_MS ?? 90_000),
+  maxTurnsPerAgent: Number(process.env.SWARM_MAX_TURNS ?? 14),
+  maxReviewRounds: Number(process.env.SWARM_MAX_REVIEW_ROUNDS ?? 3),
+  commandTimeoutMs: Number(process.env.SWARM_CMD_TIMEOUT_MS ?? 90_000),
   maxToolResultChars: 12_000,
   maxFileBytes: 200_000,
 } as const;
 
 export const PORTS = {
-  ws: Number(process.env.ARENA_WS_PORT ?? 8787),
+  ws: Number(process.env.SWARM_WS_PORT ?? 8787),
   /** The port the shipped app is served on. */
-  app: Number(process.env.ARENA_APP_PORT ?? 4310),
+  app: Number(process.env.SWARM_APP_PORT ?? 4310),
 } as const;
 
 /**
@@ -120,9 +120,9 @@ export const PORTS = {
  * iterating and useless on stage — nobody can read it. 2.5 puts a full run at
  * roughly half a minute, which is the pace you can actually narrate over.
  */
-export const REHEARSAL_SPEED = Number(process.env.ARENA_REHEARSAL_SPEED ?? 2.5);
+export const REHEARSAL_SPEED = Number(process.env.SWARM_REHEARSAL_SPEED ?? 2.5);
 
-export const DEPLOY_TARGET = (process.env.ARENA_DEPLOY_TARGET ?? 'tunnel') as
+export const DEPLOY_TARGET = (process.env.SWARM_DEPLOY_TARGET ?? 'tunnel') as
   | 'tunnel'
   | 'local'
   | 'fly';

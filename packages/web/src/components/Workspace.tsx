@@ -1,9 +1,9 @@
-import type { ArenaState } from '../store';
+import type { SwarmState } from '../store';
 
 const FRESH_MS = 5000;
 
 /** Files as they appear and change. A revision badge marks a rewritten file. */
-export function Workspace({ state }: { state: ArenaState }) {
+export function Workspace({ state }: { state: SwarmState }) {
   const files = Object.values(state.files).sort((a, b) => a.path.localeCompare(b.path));
 
   return (

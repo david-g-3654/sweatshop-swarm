@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Sandbox, isAllowedCommand } from '../src/tools/sandbox.js';
 
-const sandbox = new Sandbox(path.join(os.tmpdir(), 'arena-test-sandbox'));
+const sandbox = new Sandbox(path.join(os.tmpdir(), 'swarm-test-sandbox'));
 
 test('resolves paths inside the sandbox', () => {
   assert.equal(sandbox.resolve('src/app.js'), path.join(sandbox.root, 'src/app.js'));
@@ -20,8 +20,8 @@ test('refuses absolute paths', () => {
 });
 
 test('does not treat a sibling directory as inside the root', () => {
-  const sibling = new Sandbox('/tmp/arena');
-  assert.throws(() => sibling.resolve('../arena-evil/x'), /escapes the sandbox/);
+  const sibling = new Sandbox('/tmp/swarm');
+  assert.throws(() => sibling.resolve('../swarm-evil/x'), /escapes the sandbox/);
 });
 
 test('allows plain allowlisted commands', () => {

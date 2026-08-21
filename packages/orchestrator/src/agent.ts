@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AgentStatus } from '@arena/shared';
+import type { AgentStatus } from '@swarm/shared';
 import { LIMITS, PROVIDER } from './config.js';
 import { client, buildRequest } from './llm/client.js';
 import type { UsageMeter } from './usage.js';

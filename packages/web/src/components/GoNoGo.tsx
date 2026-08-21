@@ -1,5 +1,5 @@
-import { ROSTER } from '@arena/shared';
-import type { ArenaState } from '../store';
+import { ROSTER } from '@swarm/shared';
+import type { SwarmState } from '../store';
 
 /**
  * The GO/NO-GO poll — the one piece of choreography in this interface.
@@ -14,7 +14,7 @@ import type { ArenaState } from '../store';
 
 const WINDOW_MS = 3600;
 
-export function GoNoGo({ state }: { state: ArenaState }) {
+export function GoNoGo({ state }: { state: SwarmState }) {
   // Once the run has landed, nothing gets to cover the URL. The deployed link
   // is the climax; a poll band still hanging over it steals the moment.
   if (state.finished) return null;

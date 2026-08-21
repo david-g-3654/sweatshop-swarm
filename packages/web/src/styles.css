@@ -126,13 +126,15 @@ body {
 .strip-inner {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.9rem 1.5rem;
   padding: 10px 14px;
   background: var(--console);
   border: 1px solid var(--rule);
 }
 
 .met {
+  flex: none;
   font-family: var(--mono);
   font-size: 1.9rem;
   font-weight: 500;
@@ -148,6 +150,11 @@ body {
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
+  /* Two words, and it must never become two lines — a wrapped wordmark drags
+     the mission clock out of alignment and the whole strip looks broken. The
+     goal text is the flexible element here; this is not. */
+  white-space: nowrap;
+  flex: none;
 }
 
 .goal {

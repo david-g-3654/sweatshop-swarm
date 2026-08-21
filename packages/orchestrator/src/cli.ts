@@ -7,7 +7,7 @@ import * as recorder from './recorder.js';
  * Headless runner, for rehearsing the canonical task from a terminal.
  *
  *   npm run rehearse
- *   npm run arena -- --goal "build and deploy a URL shortener with analytics"
+ *   npm run swarm -- --goal "build and deploy a URL shortener with analytics"
  */
 
 const args = process.argv.slice(2);
@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 /**
  * Read a flag's value, joining every word up to the next flag.
  *
- * `npm run arena -- --goal "a b c"` loses the quoting on its way through npm,
+ * `npm run swarm -- --goal "a b c"` loses the quoting on its way through npm,
  * so the goal arrives as separate argv entries. Taking only args[i+1] would
  * silently run with the goal "a".
  */

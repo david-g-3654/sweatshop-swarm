@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { ArenaEvent, ClientFrame, ServerFrame } from '@arena/shared';
+import type { SwarmEvent, ClientFrame, ServerFrame } from '@swarm/shared';
 import { PORTS, PROVIDER } from './config.js';
 import { Orchestrator } from './orchestrator.js';
 import { Rehearsal } from './rehearsal.js';
@@ -17,7 +17,7 @@ import { hasKey } from './llm/client.js';
 
 let running = false;
 /** Events of the most recent run (live or loaded from disk) for late joiners. */
-let currentEvents: ArenaEvent[] = [];
+let currentEvents: SwarmEvent[] = [];
 let currentRunId: string | null = null;
 let currentGoal: string | null = null;
 
@@ -54,10 +54,10 @@ async function startRun(goal: string, mode: 'live' | 'rehearsal' = 'live'): Prom
   try {
     const outcome = await driver.run();
     const file = await recorder.save(driver.bus.toRecording());
-    console.log(`[arena] run ${outcome.runId} ${outcome.ok ? 'succeeded' : 'failed'} — recorded to ${file}`);
+    console.log(`[swarm] run ${outcome.runId} ${outcome.ok ? 'succeeded' : 'failed'} — recorded to ${file}`);
     broadcast({ kind: 'runs', runs: await recorder.list() });
   } catch (err) {
-    console.error('[arena] run crashed:', err);
+    console.error('[swarm] run crashed:', err);
     broadcast({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
   } finally {
     running = false;
@@ -123,12 +123,36 @@ wss.on('connection', async (socket) => {
   socket.on('close', () => clients.delete(socket));
 });
 
+/**
+ * A port collision is the likeliest thing to go wrong when restarting mid-demo,
+ * and the default behaviour is an unhandled 'error' event and a stack trace.
+ *
+ * The handler goes on both the http server and the WebSocketServer: ws re-emits
+ * the underlying server's error on itself, so handling only one of them still
+ * leaves the other unhandled and still crashes.
+ */
+function onServerError(err: NodeJS.ErrnoException): void {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `[swarm] port ${PORTS.ws} is already in use — another server is probably still running.\n` +
+        `        kill it:      lsof -ti:${PORTS.ws} | xargs kill\n` +
+        `        or move it:   SWARM_WS_PORT=8788 npm run server`,
+    );
+    process.exit(1);
+  }
+  console.error('[swarm] server error:', err.message);
+  process.exit(1);
+}
+
+server.on('error', onServerError);
+wss.on('error', onServerError);
+
 server.listen(PORTS.ws, () => {
-  console.log(`[arena] mission control feed on ws://localhost:${PORTS.ws}`);
-  console.log(`[arena] provider: ${PROVIDER}`);
+  console.log(`[swarm] mission control feed on ws://localhost:${PORTS.ws}`);
+  console.log(`[swarm] provider: ${PROVIDER}`);
   if (!hasKey()) {
     const key = PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY';
-    console.warn(`[arena] ${key} is not set — live runs will fail, but Rehearse still works.`);
+    console.warn(`[swarm] ${key} is not set — live runs will fail, but Rehearse still works.`);
   }
 });
 

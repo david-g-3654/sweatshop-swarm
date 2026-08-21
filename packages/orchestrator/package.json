@@ -1,5 +1,5 @@
 {
-  "name": "@arena/orchestrator",
+  "name": "@swarm/orchestrator",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,12 +8,12 @@
     "start": "tsx src/server.ts",
     "test": "tsx --test test/*.test.ts",
     "rehearse": "tsx src/cli.ts --rehearse",
-    "arena": "tsx src/cli.ts",
+    "swarm": "tsx src/cli.ts",
     "probe": "tsx src/probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
-    "@arena/shared": "*",
+    "@swarm/shared": "*",
     "dotenv": "^17.2.3",
     "ws": "^8.18.3"
   },

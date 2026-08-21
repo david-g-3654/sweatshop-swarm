@@ -1,4 +1,4 @@
-import { useArena } from './store';
+import { useSwarm } from './store';
 import { useSocket } from './useSocket';
 import { StatusStrip } from './components/StatusStrip';
 import { Graph } from './components/Graph';
@@ -10,7 +10,7 @@ import { GoNoGo } from './components/GoNoGo';
 
 export function App() {
   const { send } = useSocket();
-  const { derived, connected, error } = useArena();
+  const { derived, connected, error } = useSwarm();
 
   return (
     <div className="shell">

@@ -112,9 +112,9 @@ and the sandbox, and there is one projector.
 `packages/web/src/store.ts` holds the whole idea:
 
 ```
-events: ArenaEvent[]        the log, append-only
+events: SwarmEvent[]        the log, append-only
 cursor: number              how many of them are applied
-derived: ArenaState         reduceEvents(events, cursor)
+derived: SwarmState         reduceEvents(events, cursor)
 ```
 
 Scrubbing sets `cursor`. Following live keeps it pinned to `events.length`.

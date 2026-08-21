@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import type { ClientFrame, ServerFrame } from '@arena/shared';
-import { useArena } from './store';
+import type { ClientFrame, ServerFrame } from '@swarm/shared';
+import { useSwarm } from './store';
 
-const URL = import.meta.env.VITE_ARENA_WS ?? `ws://${location.hostname}:8787`;
+const URL = import.meta.env.VITE_SWARM_WS ?? `ws://${location.hostname}:8787`;
 
 /**
  * The feed.
@@ -22,16 +22,16 @@ export function useSocket() {
       const ws = new WebSocket(URL);
       socket.current = ws;
 
-      ws.onopen = () => useArena.getState().setConnected(true);
+      ws.onopen = () => useSwarm.getState().setConnected(true);
       ws.onmessage = (message) => {
         try {
-          useArena.getState().ingest(JSON.parse(message.data as string) as ServerFrame);
+          useSwarm.getState().ingest(JSON.parse(message.data as string) as ServerFrame);
         } catch {
           // A malformed frame is not worth tearing the view down for.
         }
       };
       ws.onclose = () => {
-        useArena.getState().setConnected(false);
+        useSwarm.getState().setConnected(false);
         if (!closed) retry = window.setTimeout(connect, 1200);
       };
       ws.onerror = () => ws.close();
@@ -42,12 +42,12 @@ export function useSocket() {
     const onLoadRun = (event: Event) => {
       send({ kind: 'load-run', runId: (event as CustomEvent<string>).detail });
     };
-    window.addEventListener('arena:load-run', onLoadRun);
+    window.addEventListener('swarm:load-run', onLoadRun);
 
     return () => {
       closed = true;
       window.clearTimeout(retry);
-      window.removeEventListener('arena:load-run', onLoadRun);
+      window.removeEventListener('swarm:load-run', onLoadRun);
       socket.current?.close();
     };
   }, []);

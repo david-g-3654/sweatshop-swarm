@@ -50,7 +50,7 @@ interface BaseEvent {
   runId: string;
 }
 
-export type ArenaEvent =
+export type SwarmEvent =
   | (BaseEvent & {
       type: 'run.started';
       goal: string;
@@ -126,7 +126,7 @@ export type ArenaEvent =
   /** The line the audience actually reads. */
   | (BaseEvent & { type: 'drama'; level: DramaLevel; text: string; agentId?: AgentId });
 
-export type ArenaEventType = ArenaEvent['type'];
+export type SwarmEventType = SwarmEvent['type'];
 
 /** A recorded run: exactly what the live feed emitted, in order. */
 export interface RecordedRun {
@@ -137,13 +137,13 @@ export interface RecordedRun {
   finishedAt: number;
   ok: boolean;
   deployUrl?: string;
-  events: ArenaEvent[];
+  events: SwarmEvent[];
 }
 
 /** Narrow an event by type, with the payload typed. */
-export function isEvent<T extends ArenaEventType>(
-  e: ArenaEvent,
+export function isEvent<T extends SwarmEventType>(
+  e: SwarmEvent,
   type: T,
-): e is Extract<ArenaEvent, { type: T }> {
+): e is Extract<SwarmEvent, { type: T }> {
   return e.type === type;
 }

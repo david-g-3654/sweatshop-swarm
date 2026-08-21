@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { RUNS_DIR } from './config.js';
-import type { RecordedRun, RunSummary } from '@arena/shared';
-import { summarise } from '@arena/shared';
+import type { RecordedRun, RunSummary } from '@swarm/shared';
+import { summarise } from '@swarm/shared';
 
 /**
  * Recorded runs.

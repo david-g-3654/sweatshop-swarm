@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Phase } from '@arena/shared';
+import type { Phase } from '@swarm/shared';
 import { REPO_ROOT, SANDBOX_ROOT, REHEARSAL_SPEED } from './config.js';
 import { EventBus } from './bus.js';
 import { Sandbox } from './tools/index.js';

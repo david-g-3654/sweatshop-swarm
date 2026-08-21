@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Phase } from '@arena/shared';
+import type { Phase } from '@swarm/shared';
 import { SANDBOX_ROOT, LIMITS } from './config.js';
 import { EventBus } from './bus.js';
 import { Agent } from './agent.js';

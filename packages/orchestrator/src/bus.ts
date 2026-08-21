@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { ArenaEvent, RecordedRun } from '@arena/shared';
-import { EVENT_SCHEMA_VERSION } from '@arena/shared';
+import type { SwarmEvent, RecordedRun } from '@swarm/shared';
+import { EVENT_SCHEMA_VERSION } from '@swarm/shared';
 
 /**
  * An event as emitted by the orchestrator, before the bus stamps it.
@@ -10,11 +10,11 @@ import { EVENT_SCHEMA_VERSION } from '@arena/shared';
  */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-export type EmittedEvent = DistributiveOmit<ArenaEvent, 'id' | 'seq' | 'ts' | 'runId'> & {
+export type EmittedEvent = DistributiveOmit<SwarmEvent, 'id' | 'seq' | 'ts' | 'runId'> & {
   ts?: number;
 };
 
-export type Subscriber = (event: ArenaEvent) => void;
+export type Subscriber = (event: SwarmEvent) => void;
 
 /**
  * The event bus.
@@ -27,7 +27,7 @@ export type Subscriber = (event: ArenaEvent) => void;
  * order, so a late joiner and an early joiner end up in identical state.
  */
 export class EventBus {
-  readonly log: ArenaEvent[] = [];
+  readonly log: SwarmEvent[] = [];
   private subscribers = new Set<Subscriber>();
   private seq = 0;
 
@@ -36,14 +36,14 @@ export class EventBus {
     readonly goal: string,
   ) {}
 
-  emit(event: EmittedEvent): ArenaEvent {
+  emit(event: EmittedEvent): SwarmEvent {
     const stamped = {
       ...event,
       id: randomUUID(),
       seq: this.seq++,
       ts: event.ts ?? Date.now(),
       runId: this.runId,
-    } as ArenaEvent;
+    } as SwarmEvent;
 
     this.log.push(stamped);
     for (const subscriber of this.subscribers) {
@@ -68,7 +68,7 @@ export class EventBus {
   }
 
   /** Snapshot for a client that just connected. */
-  backlog(): ArenaEvent[] {
+  backlog(): SwarmEvent[] {
     return [...this.log];
   }
 

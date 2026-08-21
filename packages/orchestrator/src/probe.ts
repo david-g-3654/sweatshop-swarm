@@ -35,7 +35,7 @@ const api = new Anthropic({
         baseURL: OPENROUTER_BASE_URL,
         defaultHeaders: {
           'HTTP-Referer': 'https://github.com/david-g-3654/sweatshop-swarm',
-          'X-Title': 'Agent Arena',
+          'X-Title': 'Sweatshop Swarm',
         },
       }
     : {}),
@@ -129,7 +129,7 @@ const toolsWork = await probe(
 );
 
 // 3. Strict tool schemas.
-await probe('strict tool schemas', 'ARENA_STRICT_TOOLS', {
+await probe('strict tool schemas', 'SWARM_STRICT_TOOLS', {
   ...BASE,
   messages: [{ role: 'user', content: 'Use the echo tool with the text "hello".' }],
   tools: [{ ...SAMPLE_TOOL, strict: true } as Anthropic.Tool],
@@ -142,7 +142,7 @@ await probe('strict tool schemas', 'ARENA_STRICT_TOOLS', {
 // no thinking block and looks exactly like an unsupported parameter.
 await probe(
   'thinking + summary',
-  'ARENA_THINKING',
+  'SWARM_THINKING',
   {
     ...BASE,
     max_tokens: 3000,
@@ -169,7 +169,7 @@ await probe(
 );
 
 // 5. Effort.
-await probe('output_config.effort', 'ARENA_EFFORT', {
+await probe('output_config.effort', 'SWARM_EFFORT', {
   ...BASE,
   output_config: { effort: 'low' },
 });
@@ -177,7 +177,7 @@ await probe('output_config.effort', 'ARENA_EFFORT', {
 // 6. Prompt caching. Worth real money over a six-agent run.
 await probe(
   'prompt cache_control',
-  'ARENA_PROMPT_CACHE',
+  'SWARM_PROMPT_CACHE',
   {
     ...BASE,
     system: [
@@ -208,10 +208,10 @@ if (!toolsWork) {
 }
 
 const CONSEQUENCE: Record<string, string> = {
-  ARENA_THINKING: 'console panels stream visible text but no reasoning summary',
-  ARENA_EFFORT: 'models run at their default effort',
-  ARENA_STRICT_TOOLS: 'tool inputs are validated by the tools themselves, not the API',
-  ARENA_PROMPT_CACHE: 'the system prompt is billed in full on every turn',
+  SWARM_THINKING: 'console panels stream visible text but no reasoning summary',
+  SWARM_EFFORT: 'models run at their default effort',
+  SWARM_STRICT_TOOLS: 'tool inputs are validated by the tools themselves, not the API',
+  SWARM_PROMPT_CACHE: 'the system prompt is billed in full on every turn',
 };
 
 const flags = results.filter((r) => r.envVar);
@@ -219,7 +219,7 @@ const rejected = flags.filter((r) => !r.ok);
 const hollow = flags.filter((r) => r.ok && r.partial);
 
 console.log('\nPut these in .env:\n');
-console.log(`ARENA_PROVIDER=${PROVIDER}`);
+console.log(`SWARM_PROVIDER=${PROVIDER}`);
 // A parameter that is accepted but not honoured still stays on: it costs
 // nothing and may engage on harder prompts than this probe uses.
 for (const flag of flags) console.log(`${flag.envVar}=${flag.ok ? 1 : 0}`);

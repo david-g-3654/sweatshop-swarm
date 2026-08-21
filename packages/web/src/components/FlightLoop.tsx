@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { ArenaState } from '../store';
+import type { SwarmState } from '../store';
 import { met } from '../time';
 
 const MARK = { info: '·', good: '✓', warn: '!', bad: '✗' } as const;
@@ -11,7 +11,7 @@ const MARK = { info: '·', good: '✓', warn: '!', bad: '✗' } as const;
  * on the screen and it never has to be interpreted — every entry is a plain
  * sentence about something that just happened.
  */
-export function FlightLoop({ state }: { state: ArenaState }) {
+export function FlightLoop({ state }: { state: SwarmState }) {
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
