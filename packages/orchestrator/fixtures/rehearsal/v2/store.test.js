@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shorten, resolve, recordHit, stats, validateUrl, reset } from './store.js';
+import { shorten, resolve, recordHit, stats, allStats, totalClicks, clicksPerSecond, validateUrl, reset } from './store.js';
 
 test('shortens and resolves a url', () => {
   reset();
@@ -38,6 +38,14 @@ test('counts clicks and attributes referrers', () => {
   assert.equal(s.referrers.direct, 1);
 });
 
+test('a burst of clicks loses none of them', () => {
+  reset();
+  const code = shorten('https://example.com');
+  for (let i = 0; i < 500; i++) recordHit(code, null);
+  assert.equal(stats(code).clicks, 500);
+  assert.equal(totalClicks(), 500);
+});
+
 test('recording a hit on an unknown code fails softly', () => {
   reset();
   assert.equal(recordHit('nope42', 'x'), false);
@@ -46,4 +54,28 @@ test('recording a hit on an unknown code fails softly', () => {
 test('stats for an unknown code is null, not a crash', () => {
   reset();
   assert.equal(stats('nope42'), null);
+});
+
+test('allStats ranks busiest first, which is what the chart draws', () => {
+  reset();
+  const quiet = shorten('https://quiet.example', 'quiet');
+  const busy = shorten('https://busy.example', 'busy');
+  for (let i = 0; i < 5; i++) recordHit(busy, null);
+  recordHit(quiet, null);
+  const ranked = allStats();
+  assert.equal(ranked[0].code, busy);
+  assert.equal(ranked[0].clicks, 5);
+  assert.equal(ranked[1].code, quiet);
+});
+
+test('clicksPerSecond buckets recent clicks and ignores old ones', () => {
+  reset();
+  const code = shorten('https://example.com');
+  recordHit(code, null);
+  const buckets = clicksPerSecond(30);
+  assert.equal(buckets.length, 30);
+  assert.equal(buckets.reduce((a, b) => a + b, 0), 1);
+  assert.equal(buckets[29], 1, 'newest click belongs in the newest bucket');
+  // A click from an hour ago must not appear in a 30 second window.
+  assert.equal(clicksPerSecond(30, Date.now() + 3_600_000).reduce((a, b) => a + b, 0), 0);
 });

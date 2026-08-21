@@ -70,6 +70,17 @@ A full live run, end to end, against OpenRouter:
 Review is the longest phase, which is the right shape for the thing being
 demonstrated.
 
+### The artifact is the punchline
+
+When the deploy lands, mission control switches from the agent graph to the
+running app — embedded, live, with a QR code next to it. A cloudflared hostname
+is four random words nobody can type from the back of a room, so the code is not
+decoration: it is how eighty people reach the link at once.
+
+Which is also why the canonical goal is a *live* dashboard rather than a plain
+shortener. "Curl returns 200" proves the deploy to one person. A roomful of
+phones driving a counter upward proves it to everyone at the same time.
+
 ### Replay is not a video
 
 A recorded run is the event log and nothing else, because the event log is the

@@ -39,50 +39,66 @@ interface Line {
 
 const PLAN_TEXT = `Splitting this by file so the two engineers never touch the same one.
 
-Engineer A owns the pure logic: store.js plus store.test.js. No HTTP in there at
-all — shorten(url) returns a code, resolve(code) returns a url, recordHit(code,
-referrer) and stats(code) handle the analytics.
+Engineer A owns everything that is a pure function: store.js plus store.test.js.
+shorten(url, label) returns a code, resolve(code) returns a url, recordHit(code,
+referrer) records a click, and the dashboard's numbers come from allStats(),
+totalClicks() and clicksPerSecond(30). No HTTP in there, no markup.
 
-Engineer B owns the transport: server.js plus server.test.js, importing
-./store.js and reading its port from process.env.PORT.
+Engineer B owns transport and markup: server.js, the dashboard page it serves,
+and server.test.js. It imports ./store.js, reads its port from process.env.PORT,
+and pushes updates to the browser over an SSE stream at /api/stream.
 
-The interface between them is those four exported functions. They cannot talk
-while they work, so that contract is fixed now.
+Putting the aggregation on A's side keeps the split even — B ends up with
+routing and rendering rather than logic. The interface between them is those six
+exported functions, fixed now, because they cannot talk while they work.
 
 \`\`\`json
 {
-  "summary": "a URL shortener with click analytics, on plain Node",
+  "summary": "a URL shortener with a live click-analytics dashboard, on plain Node",
   "workstreams": [
-    { "owner": "engineer-a", "title": "Core store + analytics", "brief": "store.js and store.test.js" },
-    { "owner": "engineer-b", "title": "HTTP server", "brief": "server.js and server.test.js" }
+    { "owner": "engineer-a", "title": "Store + analytics aggregation", "brief": "store.js and store.test.js" },
+    { "owner": "engineer-b", "title": "HTTP server + live dashboard", "brief": "server.js, dashboard.js and server.test.js" }
   ],
-  "acceptance": ["the suite is green", "the server responds over HTTP", "clicks are counted per code"]
+  "acceptance": [
+    "the suite is green",
+    "the dashboard updates without a page reload",
+    "a burst of clicks is counted exactly"
+  ]
 }
 \`\`\``;
 
-const REVIEW_1 = `I have read store.js and server.js. The tests are green, and I am
-still sending this back — a green suite that only covers the happy path is
-exactly the thing my rubric exists to catch.
+const REVIEW_1 = `I have read store.js, server.js and the dashboard. The tests are
+green, and I am still sending this back — a green suite that only covers the
+happy path is exactly the thing my rubric exists to catch. Two of these are
+specific to it being a live dashboard, and they are the ones that will bite on
+stage.
 
 1. store.js — shorten() takes whatever it is handed. null, an empty string, a
-   number, "not a url", a three-kilobyte string all become links. Validate the
-   input: non-empty string, parseable as a URL, http or https only, length
-   capped.
+   number, "not a url" all become links. Validate: non-empty string, parseable
+   as a URL, http or https only, length capped.
 2. store.js — createCode() can collide. On a collision shorten() silently
    overwrites somebody else's link and their traffic starts going somewhere
-   else. Retry on collision and fail loudly if you cannot allocate one.
+   else. Retry, and fail loudly if you cannot allocate one.
 3. store.js — recordHit() calls hits.get(code).push(...) with no check. An
    unknown code throws TypeError on undefined. It must fail softly.
-4. store.js — the hits array grows without bound. One hammered link is an
-   unbounded memory leak. Cap it.
-5. server.js — JSON.parse on the request body is unguarded. A malformed body is
-   an unhandled rejection and a 500 where it should be a 400.
-6. server.js — resolve() returning undefined is passed straight into the 302
-   Location header. An unknown code redirects the browser to "undefined"
-   instead of returning 404. Same for /api/stats/, which serves a JSON body of
-   nulls with a 200.
-7. Both test files only assert the happy path. Every public behaviour needs a
-   failure-case test: bad input, unknown code, malformed body.
+4. store.js — the hits array grows without bound. A link that gets hammered by
+   a room full of people is an unbounded memory leak. Cap it.
+5. server.js — the redirect route reads snapshot() BEFORE recordHit() and
+   broadcasts that. Every dashboard therefore renders the counts from before
+   the click that triggered the update, so under a burst the chart is
+   permanently one behind. Broadcast after the write, from a fresh snapshot.
+6. server.js — /api/stream adds the response to subscribers and never removes
+   it. There is no 'close' handler, so every dashboard anyone opens is retained
+   for the life of the process and written to forever. Delete on close and on
+   error.
+7. server.js — an unknown code puts undefined straight into the 302 Location
+   header, and /api/stats/ on an unknown code reads .url off undefined and
+   500s. Both need a 404.
+8. server.js — JSON.parse on the request body is unguarded. A malformed body is
+   an unhandled rejection where it should be a 400.
+9. Both test files only assert the happy path. Every public behaviour needs a
+   failure-case test, and given the goal, one of them has to be a burst: fire
+   many clicks at once and assert the count is exact.
 
 VERDICT: CHANGES_REQUESTED`;
 
@@ -90,13 +106,20 @@ const REVIEW_2 = `Re-read both files.
 
 Validation is in and normalises the URL rather than echoing it back. Collisions
 retry and then fail loudly. recordHit returns false on an unknown code instead
-of throwing, and the hit list is capped. The server returns 400 on a malformed
-body and 404 on an unknown code for both the redirect and the stats route.
+of throwing, and the hit list is capped.
 
-The failure cases are covered now — bad input, unknown code, malformed body,
-and the 404s are asserted on both routes.
+The two live-dashboard problems are fixed properly. The redirect route now
+broadcasts after recording, building a fresh snapshot each time, so the chart
+cannot sit one click behind. /api/stream removes its subscriber on both 'close'
+and 'error', and there is a test that opens a stream, drops it, and asserts the
+subscriber set returns to its previous size — that is the right way to prove a
+leak is gone.
 
-That is all seven findings addressed. Good work.
+404s on unknown codes for both the redirect and the stats route, 400 on a
+malformed body, and the failure cases are covered. The burst test fires 200
+concurrent clicks and asserts the total is exactly 200.
+
+That is all nine findings addressed. Good work.
 
 VERDICT: APPROVED`;
 
@@ -163,23 +186,24 @@ export class Rehearsal {
     // --- plan ---
     this.phase('planning');
     await this.say({ agentId: 'planner', text: PLAN_TEXT });
-    this.bus.drama('good', 'Planner split the work: Core store + analytics | HTTP server', 'planner');
-    this.bus.emit({ type: 'message.sent', from: 'planner', to: 'engineer-a', kind: 'assign', summary: 'Core store + analytics' });
-    this.bus.emit({ type: 'message.sent', from: 'planner', to: 'engineer-b', kind: 'assign', summary: 'HTTP server' });
+    this.bus.drama('good', 'Planner split the work: Store + analytics aggregation | HTTP server + live dashboard', 'planner');
+    this.bus.emit({ type: 'message.sent', from: 'planner', to: 'engineer-a', kind: 'assign', summary: 'Store + analytics aggregation' });
+    this.bus.emit({ type: 'message.sent', from: 'planner', to: 'engineer-b', kind: 'assign', summary: 'HTTP server + live dashboard' });
 
     // --- build (genuinely concurrent, like the real thing) ---
     this.phase('building');
     this.bus.drama('info', 'Engineer A and Engineer B are writing code in parallel.');
     await Promise.all([
       (async () => {
-        await this.say({ agentId: 'engineer-a', text: 'Taking store.js. Pure functions, a Map for the links and a Map for the hits, plus tests.' });
+        await this.say({ agentId: 'engineer-a', text: 'Taking store.js. Pure functions — a Map for the links, a Map for the hits, and the aggregation the dashboard renders: allStats, totalClicks, clicksPerSecond. Plus tests.' });
         await this.writeFixture('engineer-a', 'v1', 'package.json');
         await this.writeFixture('engineer-a', 'v1', 'store.js');
         await this.writeFixture('engineer-a', 'v1', 'store.test.js');
       })(),
       (async () => {
         await this.pause(400);
-        await this.say({ agentId: 'engineer-b', text: 'Taking server.js. node:http, POST /api/shorten, GET /:code redirect, GET /api/stats/:code.' });
+        await this.say({ agentId: 'engineer-b', text: 'Taking the server and the page. node:http, POST /api/links, GET /:code redirect, and an SSE stream at /api/stream so the chart moves without a reload.' });
+        await this.writeFixture('engineer-b', 'v1', 'dashboard.js');
         await this.writeFixture('engineer-b', 'v1', 'server.js');
         await this.writeFixture('engineer-b', 'v1', 'server.test.js');
       })(),
@@ -191,26 +215,27 @@ export class Rehearsal {
     this.phase('review');
     this.bus.drama('info', 'Review round 1.', 'reviewer');
     this.bus.emit({ type: 'agent.status', agentId: 'reviewer', status: 'tool', detail: 'read_file' });
-    for (const file of ['store.js', 'server.js']) {
+    for (const file of ['store.js', 'server.js', 'dashboard.js']) {
       await executeToolWithEvents(this.bus, 'reviewer', this.sandbox, 'read_file', { path: file }, randomUUID());
       await this.pause(180);
     }
     await this.say({ agentId: 'reviewer', text: REVIEW_1 });
-    this.bus.drama('bad', 'Reviewer rejected the PR: shorten() takes whatever it is handed — no input validation.', 'reviewer');
+    this.bus.drama('bad', 'Reviewer rejected the PR: the dashboard broadcasts a snapshot taken before the click it is reporting, so the chart is permanently one behind.', 'reviewer');
     for (const id of ['engineer-a', 'engineer-b']) {
-      this.bus.emit({ type: 'message.sent', from: 'reviewer', to: id, kind: 'reject', summary: '7 findings' });
+      this.bus.emit({ type: 'message.sent', from: 'reviewer', to: id, kind: 'reject', summary: '9 findings' });
     }
 
     // --- fixes ---
     await Promise.all([
       (async () => {
-        await this.say({ agentId: 'engineer-a', text: 'Fair. Findings 1-4 and 7 are mine. Adding validateUrl, collision retry, a soft recordHit, a cap on the hit list, and failure-case tests.' }, 2);
+        await this.say({ agentId: 'engineer-a', text: 'Fair. Findings 1-4 and 9 are mine. Adding validateUrl, collision retry, a soft recordHit, a cap on the hit list, and a burst test that fires 500 clicks and asserts the count is exact.' }, 2);
         await this.writeFixture('engineer-a', 'v2', 'store.js');
         await this.writeFixture('engineer-a', 'v2', 'store.test.js');
       })(),
       (async () => {
         await this.pause(300);
-        await this.say({ agentId: 'engineer-b', text: 'Findings 5, 6 and 7 are mine. Guarding the JSON parse for a 400, returning 404 on unknown codes for both routes, and adding tests for each.' }, 2);
+        await this.say({ agentId: 'engineer-b', text: 'Findings 5 to 9 are mine. Broadcasting after the write from a fresh snapshot, dropping subscribers on close and error, 404s on unknown codes, guarding the JSON parse, and a test that proves the stream stops leaking.' }, 2);
+        await this.writeFixture('engineer-b', 'v2', 'dashboard.js');
         await this.writeFixture('engineer-b', 'v2', 'server.js');
         await this.writeFixture('engineer-b', 'v2', 'server.test.js');
       })(),

@@ -1,10 +1,10 @@
-const urls = new Map();
+const links = new Map();
 const hits = new Map();
 
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const CODE_LENGTH = 6;
 const MAX_URL_LENGTH = 2048;
-const MAX_HITS_PER_CODE = 1000;
+const MAX_HITS_PER_CODE = 5000;
 
 export function createCode() {
   let code = '';
@@ -34,45 +34,52 @@ export function validateUrl(value) {
   return parsed.toString();
 }
 
-export function shorten(url) {
+export function shorten(url, label) {
   const normalised = validateUrl(url);
 
   // Retry on collision rather than silently overwriting someone else's link.
   let code = createCode();
-  for (let attempt = 0; urls.has(code) && attempt < 10; attempt++) {
-    code = createCode();
-  }
-  if (urls.has(code)) {
-    throw new Error('could not allocate a unique code');
-  }
+  for (let attempt = 0; links.has(code) && attempt < 10; attempt++) code = createCode();
+  if (links.has(code)) throw new Error('could not allocate a unique code');
 
-  urls.set(code, normalised);
+  links.set(code, {
+    code,
+    url: normalised,
+    label: typeof label === 'string' && label.trim() ? label.trim().slice(0, 40) : normalised,
+    createdAt: Date.now(),
+  });
   hits.set(code, []);
   return code;
 }
 
-/** Returns undefined for an unknown code. Callers must handle that. */
 export function resolve(code) {
   if (typeof code !== 'string') return undefined;
-  return urls.get(code);
+  return links.get(code)?.url;
 }
 
+/**
+ * Record one click.
+ *
+ * Increment-in-place on the array we already hold. Nothing reads a count,
+ * computes a new one and writes it back, so a burst of clicks arriving together
+ * cannot lose any of them.
+ */
 export function recordHit(code, referrer) {
   const entries = hits.get(code);
   if (!entries) return false;
-  // Bounded: a link that gets hammered must not grow memory without limit.
   if (entries.length >= MAX_HITS_PER_CODE) entries.shift();
   entries.push({ at: Date.now(), referrer: referrer ?? null });
   return true;
 }
 
-/** Returns null for an unknown code so the caller can send a 404. */
 export function stats(code) {
+  const link = links.get(code);
   const entries = hits.get(code);
-  if (!entries) return null;
+  if (!link || !entries) return null;
   return {
     code,
-    url: urls.get(code),
+    url: link.url,
+    label: link.label,
     clicks: entries.length,
     lastClickAt: entries.length ? entries[entries.length - 1].at : null,
     referrers: entries.reduce((acc, hit) => {
@@ -83,7 +90,33 @@ export function stats(code) {
   };
 }
 
+/** Every link, busiest first — exactly what the dashboard chart renders. */
+export function allStats() {
+  return [...links.keys()]
+    .map((code) => stats(code))
+    .filter(Boolean)
+    .sort((a, b) => b.clicks - a.clicks || a.code.localeCompare(b.code));
+}
+
+export function totalClicks() {
+  let total = 0;
+  for (const entries of hits.values()) total += entries.length;
+  return total;
+}
+
+/** Clicks per second over the last `seconds`, oldest bucket first. */
+export function clicksPerSecond(seconds = 30, now = Date.now()) {
+  const buckets = new Array(seconds).fill(0);
+  for (const entries of hits.values()) {
+    for (const hit of entries) {
+      const age = Math.floor((now - hit.at) / 1000);
+      if (age >= 0 && age < seconds) buckets[seconds - 1 - age] += 1;
+    }
+  }
+  return buckets;
+}
+
 export function reset() {
-  urls.clear();
+  links.clear();
   hits.clear();
 }

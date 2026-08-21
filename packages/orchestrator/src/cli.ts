@@ -29,7 +29,7 @@ function flag(name: string, fallback: string): string {
   return words.length ? words.join(' ') : fallback;
 }
 
-const goal = flag('goal', 'Build and deploy a working URL shortener with click analytics.');
+const goal = flag('goal', 'Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.');
 const mode = args.includes('--rehearse') ? 'rehearsal' : 'live';
 const keepAlive = args.includes('--keep-alive');
 

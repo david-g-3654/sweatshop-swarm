@@ -25,6 +25,9 @@ Your workspace is a single directory. Rules that never change:
 - run_command runs one plain command. No pipes, redirects, or && chaining.
 - The app must run on plain Node with zero npm dependencies. Use node:http,
   node:fs, node:url. Do not install packages; the demo cannot wait for npm.
+- Any browser page you serve is vanilla HTML, CSS and JS with no build step and
+  no CDN links — inline it, or serve it from a file you wrote. It has to work
+  on a phone, on conference wifi, first try.
 - Tests are plain node:test files ending in .test.js at the workspace root.
 `.trim();
 
@@ -56,10 +59,18 @@ state the exact function signatures where the two halves meet — they cannot
 talk to each other while they work, so the interface has to be pinned down by
 you, in writing, up front.
 
-For a typical "build and deploy a small web service" goal the split that works is:
-  engineer-a: the core logic module plus its unit tests (pure functions, no http)
-  engineer-b: the http server that imports that module, plus server.test.js
+For a typical "build and deploy a small web service with a browser page" goal,
+the split that works is:
+  engineer-a: the core logic and aggregation module plus its unit tests
+              (pure functions, no http, no html)
+  engineer-b: the http server that imports that module, the browser page it
+              serves, and server.test.js
 Follow that shape unless the goal clearly calls for something else.
+
+That split loads engineer-b more heavily than engineer-a. Even it up by giving
+engineer-a everything that can be expressed as a pure function — per-link
+totals, time bucketing, sorting, whatever the page needs to render — so that
+engineer-b's job is transport and markup rather than logic.
 `.trim();
 
 export const ENGINEER_SYSTEM = `
@@ -107,6 +118,14 @@ Your rubric. A change fails review if any of these is true:
    failure case per public behaviour.
 5. An error is swallowed, or reported to the caller as a success.
 6. Dead code, unreachable branches, or committed debugging output in a handler.
+7. A burst of concurrent requests can lose data. Reading a counter, computing a
+   new value and writing it back is not safe if anything can interleave, and a
+   response assembled from a snapshot taken before the last write reports stale
+   numbers. Counts must survive many clicks arriving at once.
+8. A live-updating page leaks. An open SSE stream, a subscriber list, or an
+   interval that is never cleaned up when the client disconnects accumulates
+   for as long as the process runs. Every subscription needs a matching
+   removal on 'close'.
 
 Judge only what is in the workspace. Do not invent problems, do not comment on
 style or naming, and do not ask for features nobody requested.

@@ -11,8 +11,8 @@ import { met } from '../time';
  * be true — same events, same order, same durations, same reducer.
  */
 export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | 'rehearsal') => void }) {
-  const { events, cursor, scrubbing, setCursor, follow, derived, runs } = useSwarm();
-  const [goal, setGoal] = useState('Build and deploy a working URL shortener with click analytics.');
+  const { events, cursor, scrubbing, setCursor, follow, derived, runs, connected } = useSwarm();
+  const [goal, setGoal] = useState('Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.');
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | null>(null);
 
@@ -64,12 +64,28 @@ export function Scrubber({ onStart }: { onStart: (goal: string, mode: 'live' | '
             padding: '6px 9px',
           }}
         />
-        <button className="control primary" onClick={() => onStart(goal, 'live')}>
+        {/*
+          Disabled while the feed is down. A frame sent on a closed socket is
+          dropped silently, which on stage reads as "I pressed the button and
+          nothing happened" — the worst possible failure in front of a room.
+        */}
+        <button
+          className="control primary"
+          onClick={() => onStart(goal, 'live')}
+          disabled={!connected}
+          title={connected ? undefined : 'Waiting for the orchestrator feed'}
+        >
           Run live
         </button>
-        <button className="control" onClick={() => onStart(goal, 'rehearsal')}>
+        <button
+          className="control"
+          onClick={() => onStart(goal, 'rehearsal')}
+          disabled={!connected}
+          title={connected ? undefined : 'Waiting for the orchestrator feed'}
+        >
           Rehearse
         </button>
+        {!connected && <span className="counter">reconnecting…</span>}
 
         {runs.length > 0 && (
           <select
