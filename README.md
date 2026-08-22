@@ -21,12 +21,9 @@ The graph isn't decoration — it's the product. This is agentic AI made legible
 
 One real live run, on the goal above:
 
-| | |
-|---|---|
-| Duration | 9.5 min |
-| Outcome | Rejected on round 1, fixed, approved on round 2 |
-| Tests | 37 passing |
-| Cost | $1.35 — 83% of input served from cache |
+| Duration | Outcome | Tests | Cost |
+|---|---|---|---|
+| 9.5 min | rejected on round 1, fixed, approved on round 2 | 37 passing | $1.35, 83% of input from cache |
 
 `sample-live-run` and `sample-failed-run` ship in `runs/`, so a fresh clone can
 replay a real run and a real failure without an API key.
@@ -48,15 +45,15 @@ an unbounded memory leak.
 
 ## How it's built
 
-| | |
-|---|---|
-| **Orchestration** | Hand-rolled — no LangGraph, no CrewAI. ~1,300 lines. |
-| **Agents** | A role, a system prompt, a tool whitelist, and a loop. |
-| **Models** | Claude Opus 5 plans, Claude Sonnet 5 works. |
-| **Providers** | Anthropic or OpenRouter — a base-URL swap, not a second code path. |
-| **Tools** | `write_file`, `read_file`, `list_files`, `run_command`, `run_tests`, `deploy`, `http_check` — all sandboxed. |
-| **Transport** | Every agent action is an event on a WebSocket. The schema is the contract. |
-| **UI** | React + React Flow, driven entirely by that event stream. |
+- **Orchestration** — hand-rolled, no LangGraph or CrewAI. ~1,300 lines.
+- **Agents** — a role, a system prompt, a tool whitelist, and a loop.
+- **Models** — Claude Opus 5 plans, Claude Sonnet 5 works.
+- **Providers** — Anthropic or OpenRouter; a base-URL swap, not a second code path.
+- **Tools** — `write_file`, `read_file`, `list_files`, `run_command`, `run_tests`,
+  `deploy`, `http_check`, all sandboxed.
+- **Transport** — every agent action is an event on a WebSocket. The schema is
+  the contract.
+- **UI** — React + React Flow, driven entirely by that event stream.
 
 All view state is a pure function of the event log, so replaying a recorded run
 re-runs the same reducer over the same array. There's no "replay mode" branch in
@@ -93,14 +90,14 @@ Open <http://localhost:5250>, type a goal, press **Run live**.
 
 ### Commands
 
-| | |
+| Command | What it does |
 |---|---|
 | `npm run server` | The orchestrator and the WebSocket feed. |
 | `npm run probe` | Ask your provider which features it really supports. |
 | `npm run rehearse` | Full pipeline, scripted dialogue, no API calls. |
 | `npm run swarm` | One live run, headless. `-- --goal "..."` to set the goal. |
 | `npm test` | Unit tests. |
-| `npm run typecheck` | |
+| `npm run typecheck` | Type-checks both packages. |
 
 Every run prints its own cost in the flight loop, failed runs included.
 
