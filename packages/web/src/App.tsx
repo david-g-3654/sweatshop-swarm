@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSwarm } from './store';
 import { useSocket } from './useSocket';
 import { StatusStrip } from './components/StatusStrip';
+import { Stats } from './components/Stats';
 import { Graph } from './components/Graph';
 import { FlightLoop } from './components/FlightLoop';
 import { ConsolePanel } from './components/ConsolePanel';
@@ -14,6 +15,7 @@ export function App() {
   const { send } = useSocket();
   const { derived, connected, error, replay } = useSwarm();
   const [stageView, setStageView] = useState<'graph' | 'artifact'>('graph');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // The moment a URL exists, show what was built. Scrubbing back to before the
   // deploy takes the view with it, so the panel never shows a stale artifact.
@@ -29,49 +31,48 @@ export function App() {
   return (
     <div className="shell">
       <StatusStrip state={derived} connected={connected} />
+      <Stats state={derived} />
 
-      <div className="stage">
-        <section className="bay">
-          <header>
-            <span className="placard">{showing === 'artifact' ? 'What they shipped' : 'The team'}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="placard">
-                {derived.tests
-                  ? `${derived.tests.passed} passing · ${derived.tests.failed} failing`
-                  : 'no test run yet'}
+      <section className="bay hero">
+        <header>
+          <span className="placard">{showing === 'artifact' ? 'What they shipped' : 'The team'}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {deployUrl && (
+              <span className="view-toggle" role="group" aria-label="Stage view">
+                <button className="tab" aria-selected={showing === 'graph'} onClick={() => setStageView('graph')}>
+                  Graph
+                </button>
+                <button className="tab" aria-selected={showing === 'artifact'} onClick={() => setStageView('artifact')}>
+                  Live app
+                </button>
               </span>
-              {deployUrl && (
-                <span className="view-toggle" role="group" aria-label="Stage view">
-                  <button
-                    className="tab"
-                    aria-selected={showing === 'graph'}
-                    onClick={() => setStageView('graph')}
-                  >
-                    Graph
-                  </button>
-                  <button
-                    className="tab"
-                    aria-selected={showing === 'artifact'}
-                    onClick={() => setStageView('artifact')}
-                  >
-                    Live app
-                  </button>
-                </span>
-              )}
-            </span>
-          </header>
-          <div className="body" style={{ overflow: 'hidden' }}>
-            {showing === 'artifact' ? <Artifact state={derived} replay={replay} /> : <Graph state={derived} />}
-          </div>
-        </section>
+            )}
+          </span>
+        </header>
+        <div className="body" style={{ overflow: 'hidden' }}>
+          {showing === 'artifact' ? <Artifact state={derived} replay={replay} /> : <Graph state={derived} />}
+        </div>
+      </section>
 
+      <div className="loop-column">
         <FlightLoop state={derived} />
       </div>
 
-      <div className="console-column">
-        <ConsolePanel state={derived} />
-        <Workspace state={derived} />
-      </div>
+      {/*
+        Secondary detail. Collapsed by default so the stage has one focal point —
+        a booth viewer arriving mid-run needs somewhere obvious to look, and four
+        competing panels is nowhere.
+      */}
+      <details className="drawer" open={drawerOpen} onToggle={(e) => setDrawerOpen(e.currentTarget.open)}>
+        <summary>
+          <span className="placard">Inner monologue &amp; workspace</span>
+          <span className="placard">{drawerOpen ? 'hide' : 'show'}</span>
+        </summary>
+        <div className="drawer-body">
+          <ConsolePanel state={derived} />
+          <Workspace state={derived} />
+        </div>
+      </details>
 
       {(derived.deployUrl || error) && (
         <div className="ship-row">

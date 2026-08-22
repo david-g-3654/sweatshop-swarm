@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSwarm } from '../store';
 import { met } from '../time';
+import { Timeline } from './Timeline';
 
 /**
  * The timeline scrubber, and the run controls.
@@ -133,17 +134,7 @@ export function Scrubber({
           {playing ? 'Pause' : 'Play'}
         </button>
 
-        <input
-          type="range"
-          min={0}
-          max={events.length}
-          value={cursor}
-          aria-label="Scrub the run timeline"
-          onChange={(e) => {
-            stop();
-            setCursor(Number(e.target.value));
-          }}
-        />
+        <Timeline />
 
         <span className="counter">
           {met(derived.startedAt, derived.now)} · {cursor}/{events.length}

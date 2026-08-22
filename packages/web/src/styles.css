@@ -26,10 +26,16 @@
   --ink: #e9eef8;
   --dim: #8493ad;
 
-  --display: 'IBM Plex Sans Condensed', 'Helvetica Neue', sans-serif;
+  /* Chrome is a grotesk, telemetry is monospace. Anything the machine produced
+     — events, code, tool output, streamed tokens — stays mono; anything the
+     interface says about itself is Inter. */
+  --display: Inter, 'Helvetica Neue', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
 
-  --placard: 0.72rem;
+  /* Booth type scale. The floor is what a person reads from fifteen metres,
+     not what fits the most information on a laptop. */
+  --placard: 0.78rem;   /* section labels */
+  --loop: 1.15rem;      /* the flight loop — the line people actually read */
   --gap: 12px;
 }
 
@@ -55,7 +61,7 @@ body {
   font-family: var(--display);
   font-size: var(--placard);
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--dim);
 }
@@ -64,33 +70,62 @@ body {
 
 .shell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 27rem);
+  /*
+   * Graph as the hero, the flight loop down one side in large type, and the
+   * detail panels behind a disclosure.
+   *
+   * The temptation is to show everything at once, and at a desk that is right.
+   * At a booth it is not: someone glancing over for two seconds needs a single
+   * focal point, and four equal panels give them none.
+   */
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem);
   grid-template-areas:
-    'strip strip'
-    'stage console'
-    'ship  ship'
-    'scrub scrub';
+    'strip  strip'
+    'stats  stats'
+    'hero   loop'
+    'drawer drawer'
+    'ship   ship'
+    'scrub  scrub';
   height: 100%;
   gap: var(--gap);
   padding: var(--gap);
 }
 
 .strip { grid-area: strip; }
-.stage {
-  grid-area: stage;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(9rem, 15rem);
-  gap: var(--gap);
-  min-height: 0;
+.stats { grid-area: stats; }
+.hero { grid-area: hero; min-height: 0; }
+.loop-column { grid-area: loop; display: flex; min-height: 0; }
+.loop-column > .bay { flex: 1; min-height: 0; }
+
+/* ---- collapsible detail ---- */
+
+.drawer {
+  grid-area: drawer;
+  background: var(--console);
+  border: 1px solid var(--rule);
 }
-.console-column {
-  grid-area: console;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(8rem, 14rem);
-  gap: var(--gap);
-  min-height: 0;
+.drawer > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  background: var(--panel);
 }
+.drawer > summary::-webkit-details-marker { display: none; }
+.drawer > summary:hover .placard { color: var(--ink); }
+.drawer > summary:focus-visible { outline: 2px solid var(--phosphor); outline-offset: -2px; }
+.drawer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--gap);
+  padding: var(--gap);
+  height: 22rem;
+}
+.drawer-body > .bay { min-height: 0; }
 .scrub { grid-area: scrub; }
 .ship-row { grid-area: ship; display: flex; gap: var(--gap); flex-wrap: wrap; }
 .ship-row > * { flex: 1 1 20rem; }
@@ -146,9 +181,9 @@ body {
 
 .wordmark {
   font-family: var(--display);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   /* Two words, and it must never become two lines — a wrapped wordmark drags
      the mission clock out of alignment and the whole strip looks broken. The
@@ -328,7 +363,7 @@ body {
 
 /* ---- flight loop (drama feed) ---- */
 
-.loop { font-size: 1.06rem; padding: 4px 0; }
+.loop { font-size: var(--loop); padding: 4px 0; }
 .loop-line {
   display: grid;
   grid-template-columns: 5.4rem 1.4rem 1fr;
@@ -572,8 +607,8 @@ button.control[aria-pressed='true'] {
 @media (max-width: 1100px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'strip' 'stage' 'console' 'ship' 'scrub';
-    grid-template-rows: auto minmax(26rem, 1fr) minmax(20rem, auto) auto auto;
+    grid-template-areas: 'strip' 'stats' 'hero' 'loop' 'drawer' 'ship' 'scrub';
+    grid-template-rows: auto auto minmax(24rem, 1fr) minmax(16rem, auto) auto auto auto;
     height: auto;
     min-height: 100%;
   }
@@ -655,3 +690,80 @@ button.control[aria-pressed='true'] {
 }
 .artifact-gone p { margin: 0; max-width: 28rem; }
 .artifact-gone code { color: var(--phosphor); word-break: break-all; }
+
+/* ---- KPI row ---------------------------------------------------------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--gap);
+}
+
+.tile {
+  background: var(--console);
+  border: 1px solid var(--rule);
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tile-label {
+  font-family: var(--display);
+  font-size: var(--placard);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+/* Big and tabular: these are meant to be read from across the room, and
+   numbers that shift width as they change are hard to read at a glance. */
+.tile-value {
+  font-family: var(--mono);
+  font-size: 1.55rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile[data-tone='go'] .tile-value { color: var(--go); }
+.tile[data-tone='nogo'] .tile-value { color: var(--nogo); }
+.tile[data-tone='phosphor'] .tile-value { color: var(--phosphor); }
+
+/* ---- the run as a strip ------------------------------------------------ */
+
+.timeline {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 34px;
+  padding: 0 1px;
+  background: var(--void);
+  border: 1px solid var(--rule);
+  cursor: pointer;
+  touch-action: none;
+  min-width: 0;
+}
+.timeline:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+.timeline-empty { opacity: 0.4; cursor: default; }
+
+.tick {
+  flex: 1;
+  min-width: 1px;
+  transition: opacity .15s linear;
+}
+/* The two moments worth finding on the strip without hunting for them. */
+.tick[data-verdict='reject'] { background: var(--nogo) !important; height: 100% !important; }
+.tick[data-verdict='approve'] { background: var(--go) !important; height: 100% !important; }
+
+.timeline-head {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--ink);
+  pointer-events: none;
+}
