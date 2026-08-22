@@ -128,6 +128,10 @@ sandbox/                where the agents actually work (gitignored)
 
 - [Architecture](docs/architecture.md) — the event schema, the loop, why it's shaped this way
 
+## Licence
+
+[MIT](LICENSE).
+
 ## Why hand-rolled orchestration
 
 Because the orchestration *is* the project. The model writes code; everything
