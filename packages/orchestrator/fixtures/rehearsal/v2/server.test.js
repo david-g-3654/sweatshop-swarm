@@ -35,6 +35,15 @@ test('accepts a word and reports it in the snapshot', async () => {
   assert.equal(snap.words[0].word, 'agents');
 });
 
+test('the page can update without the stream working at all', async () => {
+  // A live page whose only update path is a stream is one buffering proxy away
+  // from never updating. It must poll as well, and it must render on load
+  // rather than waiting for a first message that may never arrive.
+  const body = await (await fetch(`${base}/`)).text();
+  assert.match(body, /setInterval\(\s*refresh/, 'the page must poll as a fallback');
+  assert.match(body, /refresh\(\)/, 'the page must render on load, not wait for a stream');
+});
+
 test('serves a page that renders text, never markup', async () => {
   const body = await (await fetch(`${base}/`)).text();
   assert.match(body, /Live word cloud/);

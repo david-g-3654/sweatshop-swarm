@@ -144,18 +144,48 @@ function send(e) {
     document.getElementById('msg').textContent = res.ok
       ? 'Added "' + res.d.word + '".'
       : 'Nope: ' + res.d.error;
-    if (res.ok) input.value = '';
+    if (res.ok) { input.value = ''; refresh(); }
   });
   return false;
 }
 
+/*
+ * Two ways in, on purpose.
+ *
+ * A stream is the nice way to do this and it is not a reliable way. Behind a
+ * proxy that buffers text/event-stream — a Cloudflare quick tunnel does exactly
+ * this — the connection opens, no message is ever delivered, and the page sits
+ * on its empty state for ever while submissions succeed. The user is told
+ * "Added" and sees nothing, which looks like a broken app and is really a
+ * broken transport.
+ *
+ * So polling is the floor and the stream is an accelerator. Whichever arrives
+ * first wins; render() is idempotent, so both running costs nothing but a
+ * little traffic.
+ */
+var POLL_MS = 2000;
+
+function refresh() {
+  return fetch('/api/words')
+    .then(function (r) { return r.json(); })
+    .then(render)
+    .catch(function () { /* a dropped poll is not worth reporting */ });
+}
+
 var stream;
 function connect() {
-  stream = new EventSource('/api/stream');
-  stream.onmessage = function (ev) { render(JSON.parse(ev.data)); };
-  stream.onerror = function () { stream.close(); setTimeout(connect, 2000); };
+  try {
+    stream = new EventSource('/api/stream');
+    stream.onmessage = function (ev) { render(JSON.parse(ev.data)); };
+    stream.onerror = function () { stream.close(); setTimeout(connect, 5000); };
+  } catch (err) {
+    // No EventSource, or it was refused. Polling already has us covered.
+  }
 }
-connect();
+
+refresh();          // never sit on the empty state waiting for a stream
+connect();          // instant updates where the network allows them
+setInterval(refresh, POLL_MS);
 </script></body></html>`;
 
 const server = http.createServer(async (req, res) => {
@@ -171,6 +201,9 @@ const server = http.createServer(async (req, res) => {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
       connection: 'keep-alive',
+      // Some proxies buffer a streaming response into oblivion unless told.
+      // This is a hint, not a guarantee — hence the polling fallback on the page.
+      'x-accel-buffering': 'no',
     });
     res.write(`data: ${JSON.stringify(snapshot(CLOUD_LIMIT))}\n\n`);
     subscribers.add(res);

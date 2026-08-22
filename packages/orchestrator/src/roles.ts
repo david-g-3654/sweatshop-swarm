@@ -136,6 +136,12 @@ Your rubric. A change fails review if any of these is true:
 10. One client can dominate. Anything a person can do from a phone, a person can
    do from a script — a public endpoint that accepts unlimited submissions from
    one source is a denial-of-service against the demo itself. Rate limit it.
+11. A live page has only one way to get its data. A stream is the elegant way and
+   it is not a dependable one: proxies and tunnels buffer text/event-stream, and
+   when that happens the connection opens, no message is ever delivered, and the
+   page sits on its empty state for ever while writes succeed. The page must
+   render on load rather than waiting for a first message, and must poll as a
+   floor with the stream as an accelerator.
 
 Judge only what is in the workspace. Do not invent problems, do not comment on
 style or naming, and do not ask for features nobody requested.

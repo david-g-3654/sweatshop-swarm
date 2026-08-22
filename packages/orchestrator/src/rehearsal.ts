@@ -102,7 +102,12 @@ ends up on a screen in front of a room.
    to for the life of the process.
 9. server.js — JSON.parse on the body is unguarded, and any unknown path returns
    the page with a 200 instead of a 404.
-10. Both test files only assert the happy path. Every public behaviour needs a
+10. The page's only route to data is the SSE stream. It renders nothing on load
+   and waits for a first message, so anything that buffers text/event-stream —
+   and a tunnel in front of this will — leaves it on "nobody has said anything
+   yet" for ever while submissions quietly succeed. Render on load, and poll as
+   a floor with the stream as an accelerator.
+11. Both test files only assert the happy path. Every public behaviour needs a
    failure-case test, and given finding 1, one of them has to be an attempt to
    submit markup and an assertion that it cannot survive.
 
@@ -131,7 +136,12 @@ gone rather than asserting it is.
 400 on a malformed body, 404 on unknown paths, and the failure cases are
 covered, including a submitted <img> tag asserted not to survive.
 
-That is all ten findings addressed. Good work.
+The page no longer depends on the stream. It renders from a fetch on load and
+polls every two seconds, with the stream as an accelerator rather than the only
+route — so a proxy that swallows text/event-stream costs you two seconds of
+latency instead of the whole feature. There is a test pinning that.
+
+That is all eleven findings addressed. Good work.
 
 VERDICT: APPROVED`;
 
@@ -248,7 +258,7 @@ export class Rehearsal {
     await this.say({ agentId: 'reviewer', text: REVIEW_1 });
     this.bus.drama('bad', 'Reviewer rejected the PR: submitted words are concatenated into innerHTML — anyone can run script in every viewer\'s browser.', 'reviewer');
     for (const id of ['engineer-a', 'engineer-b']) {
-      this.bus.emit({ type: 'message.sent', from: 'reviewer', to: id, kind: 'reject', summary: '10 findings' });
+      this.bus.emit({ type: 'message.sent', from: 'reviewer', to: id, kind: 'reject', summary: '11 findings' });
     }
 
     // --- fixes ---
@@ -260,7 +270,7 @@ export class Rehearsal {
       })(),
       (async () => {
         await this.pause(300);
-        await this.say({ agentId: 'engineer-b', text: 'Finding 1 is mine and it is the bad one — the page concatenates submitted words into innerHTML. Rewriting the renderer to build elements and set textContent. Then rate limiting, broadcasting after the write, dropping subscribers on close, guarding the parse, and 404s.' }, 2);
+        await this.say({ agentId: 'engineer-b', text: 'Findings 1 and 6 to 10 are mine, and 1 is the bad one — the page concatenates submitted words into innerHTML. Rewriting the renderer to build elements and set textContent. Then rate limiting, broadcasting after the write, dropping subscribers on close, and giving the page a polling floor so a buffering proxy cannot silently kill it.' }, 2);
         await this.writeFixture('engineer-b', 'v2', 'server.js');
         await this.writeFixture('engineer-b', 'v2', 'server.test.js');
       })(),
