@@ -1,7 +1,15 @@
 import http from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { SwarmEvent, ClientFrame, ServerFrame } from '@swarm/shared';
-import { PORTS, PROVIDER, MODELS, FEATURES, BOOTH_DWELL_SECONDS, BOOTH_ON_BOOT } from './config.js';
+import {
+  PORTS,
+  PROVIDER,
+  MODELS,
+  FEATURES,
+  LIMITS,
+  BOOTH_DWELL_SECONDS,
+  BOOTH_ON_BOOT,
+} from './config.js';
 import { Orchestrator } from './orchestrator.js';
 import { Rehearsal } from './rehearsal.js';
 import { shutdown as stopDeployments } from './tools/deploy.js';
@@ -252,6 +260,14 @@ server.listen(PORTS.ws, () => {
   console.log(`[swarm] provider ${PROVIDER}  key ${keyFingerprint()}`);
   console.log(`[swarm] models   ${MODELS.planner} / ${MODELS.worker}`);
   console.log(`[swarm] features ${enabled.length ? enabled.join(' ') : 'none'}`);
+  // Print the caps that actually apply. SWARM_MAX_TURNS reads like it covers
+  // everyone and does not cover the engineers, which is the sort of thing you
+  // discover from a run that behaved nothing like the settings you thought you
+  // had chosen.
+  console.log(
+    `[swarm] limits   engineers ${LIMITS.maxTurnsPerEngineer} turns · others ` +
+      `${LIMITS.maxTurnsPerAgent} turns · ${LIMITS.maxReviewRounds} review rounds`,
+  );
   if (BOOTH_ON_BOOT) {
     console.log(`[swarm] booth loop armed — rehearsing every ${BOOTH_DWELL_SECONDS}s`);
     setLoop(true);
