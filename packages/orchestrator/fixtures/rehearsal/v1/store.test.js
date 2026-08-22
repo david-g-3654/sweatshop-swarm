@@ -1,19 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shorten, resolve, recordHit, stats, totalClicks } from './store.js';
+import { submit, ranked, total, uniqueWords } from './store.js';
 
-test('shortens and resolves a url', () => {
-  const code = shorten('https://example.com');
-  assert.equal(resolve(code), 'https://example.com');
+test('counts a word', () => {
+  submit('agents');
+  assert.equal(total(), 1);
 });
 
-test('counts clicks', () => {
-  const code = shorten('https://example.com');
-  recordHit(code, 'test');
-  recordHit(code, 'test');
-  assert.equal(stats(code).clicks, 2);
+test('folds case and spacing', () => {
+  submit('Swarm');
+  submit(' swarm ');
+  assert.equal(ranked().find((e) => e.word === 'swarm').count, 2);
 });
 
-test('totals clicks across links', () => {
-  assert.ok(totalClicks() >= 2);
+test('reports how many unique words there are', () => {
+  assert.ok(uniqueWords() >= 2);
 });

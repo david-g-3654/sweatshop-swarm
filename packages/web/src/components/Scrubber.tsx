@@ -20,7 +20,7 @@ export function Scrubber({
 }) {
   const { events, cursor, scrubbing, setCursor, follow, derived, runs, connected, loop, rejectionCursor } =
     useSwarm();
-  const [goal, setGoal] = useState('Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.');
+  const [goal, setGoal] = useState('Build and deploy a live word cloud where anyone can submit a word and it appears sized by how many people said it, updating for everyone in real time.');
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | null>(null);
 

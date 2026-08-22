@@ -62,7 +62,8 @@ you, in writing, up front.
 For a typical "build and deploy a small web service with a browser page" goal,
 the split that works is:
   engineer-a: the core logic and aggregation module plus its unit tests
-              (pure functions, no http, no html)
+              (pure functions, no http, no html) — including input validation
+              and normalisation, which is where safety starts
   engineer-b: the http server that imports that module, the browser page it
               serves, and server.test.js
 Follow that shape unless the goal clearly calls for something else.
@@ -118,14 +119,23 @@ Your rubric. A change fails review if any of these is true:
    failure case per public behaviour.
 5. An error is swallowed, or reported to the caller as a success.
 6. Dead code, unreachable branches, or committed debugging output in a handler.
-7. A burst of concurrent requests can lose data. Reading a counter, computing a
+7. Anything a stranger typed reaches the page as markup. Text submitted by one
+   visitor is rendered for every other visitor, so building HTML out of it —
+   innerHTML, insertAdjacentHTML, document.write, a template string of tags —
+   is a cross-site scripting hole, and on a shared screen it is everybody's
+   problem at once. Build nodes and set textContent, and validate on the way in
+   as well. One of those is a mitigation; both is a defence.
+8. A burst of concurrent requests can lose data. Reading a counter, computing a
    new value and writing it back is not safe if anything can interleave, and a
    response assembled from a snapshot taken before the last write reports stale
-   numbers. Counts must survive many clicks arriving at once.
-8. A live-updating page leaks. An open SSE stream, a subscriber list, or an
+   numbers. Counts must survive many submissions arriving at once.
+9. A live-updating page leaks. An open SSE stream, a subscriber list, or an
    interval that is never cleaned up when the client disconnects accumulates
    for as long as the process runs. Every subscription needs a matching
    removal on 'close'.
+10. One client can dominate. Anything a person can do from a phone, a person can
+   do from a script — a public endpoint that accepts unlimited submissions from
+   one source is a denial-of-service against the demo itself. Rate limit it.
 
 Judge only what is in the workspace. Do not invent problems, do not comment on
 style or naming, and do not ask for features nobody requested.

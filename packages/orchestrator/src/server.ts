@@ -87,7 +87,7 @@ function setLoop(enabled: boolean, goal?: string): void {
 }
 
 const DEFAULT_GOAL =
-  'Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.';
+  'Build and deploy a live word cloud where anyone can submit a word and it appears sized by how many people said it, updating for everyone in real time.';
 
 function send(socket: WebSocket, frame: ServerFrame): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(frame));

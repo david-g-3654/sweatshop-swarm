@@ -1,81 +1,95 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shorten, resolve, recordHit, stats, allStats, totalClicks, clicksPerSecond, validateUrl, reset } from './store.js';
+import { normalise, submit, ranked, total, uniqueWords, weighted, snapshot, reset } from './store.js';
 
-test('shortens and resolves a url', () => {
+test('counts a word and returns the normalised form', () => {
   reset();
-  const code = shorten('https://example.com');
-  assert.equal(resolve(code), 'https://example.com/');
+  assert.equal(submit('Agents'), 'agents');
+  assert.equal(total(), 1);
 });
 
-test('rejects input that is not a usable url', () => {
+test('normalising folds case, spacing and punctuation into one word', () => {
   reset();
-  assert.throws(() => shorten(''), /non-empty/);
-  assert.throws(() => shorten(null), /non-empty/);
-  assert.throws(() => shorten('not a url'), /valid URL/);
-  assert.throws(() => shorten('ftp://example.com'), /http or https/);
-  assert.throws(() => shorten('https://example.com/' + 'x'.repeat(3000)), /at most/);
+  submit('Agents');
+  submit('  AGENTS ');
+  submit('agents!');
+  assert.equal(uniqueWords(), 1, 'these are all the same word');
+  assert.equal(ranked()[0].count, 3);
 });
 
-test('validateUrl normalises rather than echoing input', () => {
-  assert.equal(validateUrl('https://EXAMPLE.com'), 'https://example.com/');
+test('rejects input that is not a usable word', () => {
+  reset();
+  assert.throws(() => submit(''), /not be empty/);
+  assert.throws(() => submit('   '), /not be empty/);
+  assert.throws(() => submit(null), /must be a string/);
+  assert.throws(() => submit(42), /must be a string/);
+  assert.throws(() => submit('x'.repeat(50)), /at most/);
+  assert.throws(() => submit('!!!'), /letters or digits/);
 });
 
-test('resolve returns undefined for an unknown code', () => {
+test('markup cannot survive normalisation', () => {
   reset();
-  assert.equal(resolve('nope42'), undefined);
-  assert.equal(resolve(undefined), undefined);
+  // The renderer never builds HTML from these, but defence in depth: whatever
+  // comes out of here must not be able to carry a tag.
+  for (const attack of ['<b>hi</b>', '<script>x</script>', '"><img src=x>']) {
+    let out = null;
+    try {
+      out = submit(attack);
+    } catch {
+      continue; // rejected outright is also fine
+    }
+    assert.doesNotMatch(out, /[<>"'`=/]/, `"${attack}" produced "${out}"`);
+  }
 });
 
-test('counts clicks and attributes referrers', () => {
-  reset();
-  const code = shorten('https://example.com');
-  recordHit(code, 'https://news.example');
-  recordHit(code, null);
-  const s = stats(code);
-  assert.equal(s.clicks, 2);
-  assert.equal(s.referrers['https://news.example'], 1);
-  assert.equal(s.referrers.direct, 1);
+test('keeps letters, digits, hyphens and apostrophes', () => {
+  assert.equal(normalise("Don't"), "don't");
+  assert.equal(normalise('well-known'), 'well-known');
+  assert.equal(normalise('claude5'), 'claude5');
 });
 
-test('a burst of clicks loses none of them', () => {
+test('ranks most-said first, breaking ties alphabetically', () => {
   reset();
-  const code = shorten('https://example.com');
-  for (let i = 0; i < 500; i++) recordHit(code, null);
-  assert.equal(stats(code).clicks, 500);
-  assert.equal(totalClicks(), 500);
+  submit('swarm');
+  submit('swarm');
+  submit('zebra');
+  submit('agents');
+  const list = ranked();
+  assert.equal(list[0].word, 'swarm');
+  assert.equal(list[1].word, 'agents', 'equal counts sort alphabetically');
+  assert.equal(list[2].word, 'zebra');
 });
 
-test('recording a hit on an unknown code fails softly', () => {
+test('weights scale against the most-said word', () => {
   reset();
-  assert.equal(recordHit('nope42', 'x'), false);
+  for (let i = 0; i < 10; i++) submit('loud');
+  submit('quiet');
+  const [first, second] = weighted();
+  assert.equal(first.weight, 1);
+  assert.ok(second.weight < 0.2 && second.weight > 0);
 });
 
-test('stats for an unknown code is null, not a crash', () => {
+test('a burst of submissions loses none of them', () => {
   reset();
-  assert.equal(stats('nope42'), null);
+  for (let i = 0; i < 500; i++) submit('spam');
+  assert.equal(total(), 500);
+  assert.equal(ranked()[0].count, 500);
 });
 
-test('allStats ranks busiest first, which is what the chart draws', () => {
+test('the cloud is bounded and says so rather than growing for ever', () => {
   reset();
-  const quiet = shorten('https://quiet.example', 'quiet');
-  const busy = shorten('https://busy.example', 'busy');
-  for (let i = 0; i < 5; i++) recordHit(busy, null);
-  recordHit(quiet, null);
-  const ranked = allStats();
-  assert.equal(ranked[0].code, busy);
-  assert.equal(ranked[0].clicks, 5);
-  assert.equal(ranked[1].code, quiet);
+  for (let i = 0; i < 300; i++) submit(`word${i}`);
+  assert.equal(uniqueWords(), 300);
+  assert.throws(() => submit('onetoomany'), /full/);
+  // An existing word is still countable once the cloud is full.
+  assert.equal(submit('word0'), 'word0');
 });
 
-test('clicksPerSecond buckets recent clicks and ignores old ones', () => {
+test('snapshot is what the page renders', () => {
   reset();
-  const code = shorten('https://example.com');
-  recordHit(code, null);
-  const buckets = clicksPerSecond(30);
-  assert.equal(buckets.length, 30);
-  assert.equal(buckets.reduce((a, b) => a + b, 0), 1);
-  assert.equal(buckets[29], 1, 'newest click belongs in the newest bucket');
-  // A click from an hour ago must not appear in a 30 second window.
-  assert.equal(clicksPerSecond(30, Date.now() + 3_600_000).reduce((a, b) => a + b, 0), 0);
+  submit('agents');
+  const snap = snapshot();
+  assert.equal(snap.total, 1);
+  assert.equal(snap.unique, 1);
+  assert.deepEqual(Object.keys(snap.words[0]).sort(), ['count', 'weight', 'word']);
 });

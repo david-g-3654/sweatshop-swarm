@@ -40,8 +40,8 @@ Nothing forces a rejection. If an Engineer writes something airtight first time,
 it gets approved and the demo is shorter. Rigging the verdict would make this a
 puppet show instead of a system.
 
-Here is what it actually caught on a live run — after running the suite itself
-and watching **29 of 29 tests pass**:
+Here is what it caught on a live run of an earlier goal — after running the
+suite itself and watching **29 of 29 tests pass**:
 
 > `store.js`, `addLink`: the custom-code validation only ever runs
 > `/^[A-Za-z0-9_-]{1,32}$/.test(code)` against `opts.code` without first
@@ -54,6 +54,11 @@ and watching **29 of 29 tests pass**:
 
 A green suite, a real type-coercion bug, and a reviewer that blocked the merge
 anyway. Nobody scripted that.
+
+The current goal invites a sharper one. A word cloud renders text that strangers
+typed, to everyone else watching — so the rubric now blocks any path from a
+submission to markup, and a first draft that concatenates words into `innerHTML`
+is cross-site scripting on a screen a whole room is looking at.
 
 ### It has actually done this
 
@@ -77,9 +82,10 @@ running app — embedded, live, with a QR code next to it. A cloudflared hostnam
 is four random words nobody can type from the back of a room, so the code is not
 decoration: it is how eighty people reach the link at once.
 
-Which is also why the canonical goal is a *live* dashboard rather than a plain
-shortener. "Curl returns 200" proves the deploy to one person. A roomful of
-phones driving a counter upward proves it to everyone at the same time.
+Which is also why the canonical goal is a *shared, live* artifact. "Curl returns
+200" proves the deploy to one person. A roomful of phones reshaping a word cloud
+proves it to everyone at once, and leaves something on screen that the room
+made.
 
 ### Replay is not a video
 

@@ -12,59 +12,75 @@ before(async () => {
 
 after(() => server.close());
 
-const create = (url, label) =>
-  fetch(`${base}/api/links`, {
+const say = (word) =>
+  fetch(`${base}/api/words`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url, label }),
+    body: JSON.stringify({ word }),
   });
 
-test('shortens a url and reports it on the dashboard feed', async () => {
+const clear = async () => {
   reset();
-  const res = await create('https://example.com', 'demo');
+  await fetch(`${base}/api/reset`, { method: 'POST' });
+};
+
+test('accepts a word and reports it in the snapshot', async () => {
+  await clear();
+  const res = await say('agents');
   assert.equal(res.status, 201);
-  const { code } = await res.json();
+  assert.equal((await res.json()).word, 'agents');
 
-  const redirect = await fetch(`${base}/${code}`, { redirect: 'manual' });
-  assert.equal(redirect.status, 302);
-  assert.equal(redirect.headers.get('location'), 'https://example.com/');
-
-  const snap = await (await fetch(`${base}/api/stats`)).json();
+  const snap = await (await fetch(`${base}/api/words`)).json();
   assert.equal(snap.total, 1);
-  assert.equal(snap.links[0].label, 'demo');
+  assert.equal(snap.words[0].word, 'agents');
 });
 
-test('serves a dashboard page at the root', async () => {
-  const res = await fetch(`${base}/`);
-  assert.equal(res.status, 200);
-  const body = await res.text();
-  assert.match(body, /Live click analytics/);
-  assert.match(body, /EventSource/, 'the page must actually subscribe to updates');
+test('serves a page that renders text, never markup', async () => {
+  const body = await (await fetch(`${base}/`)).text();
+  assert.match(body, /Live word cloud/);
+  assert.match(body, /EventSource/, 'the page must subscribe to updates');
+  assert.match(body, /textContent/, 'words must be set as text');
+  // Match the sink, not the word: a comment saying "never innerHTML" is not a
+  // vulnerability, and a test that cannot tell the difference is noise.
+  assert.doesNotMatch(body, /\.innerHTML\s*=/, 'nothing may assign submitted words into HTML');
+  assert.doesNotMatch(body, /insertAdjacentHTML|document\.write/, 'no other HTML sink either');
 });
 
-test('a burst of concurrent clicks is counted exactly', async () => {
-  reset();
-  const { code } = await (await create('https://example.com')).json();
-
-  // In waves rather than 200 sockets at once. Firing them all simultaneously
-  // exhausts the client connection pool and some fetches fail outright, which
-  // makes the test flaky — and a test that fails at random is worse than one
-  // that fails, because it teaches you to ignore a red suite.
-  // 25 at a time still arrives together as far as the server is concerned.
-  const WAVES = 8;
-  const PER_WAVE = 25;
-  for (let wave = 0; wave < WAVES; wave++) {
-    await Promise.all(
-      Array.from({ length: PER_WAVE }, () => fetch(`${base}/${code}`, { redirect: 'manual' })),
-    );
+test('a submitted tag cannot reach the page as markup', async () => {
+  await clear();
+  await say('<img src=x onerror=alert(1)>');
+  const snap = await (await fetch(`${base}/api/words`)).json();
+  for (const entry of snap.words) {
+    assert.doesNotMatch(entry.word, /[<>]/, `stored word "${entry.word}" still carries a tag`);
   }
+});
 
-  const snap = await (await fetch(`${base}/api/stats`)).json();
-  assert.equal(snap.total, WAVES * PER_WAVE, 'no clicks may be lost when they arrive together');
+test('rejects unusable input with 400, not 500', async () => {
+  assert.equal((await say('')).status, 400);
+  assert.equal((await say('!!!')).status, 400);
+  assert.equal((await say(null)).status, 400);
+  assert.equal((await say('x'.repeat(80))).status, 400);
+});
+
+test('rejects a malformed body with 400', async () => {
+  const res = await fetch(`${base}/api/words`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{oh no',
+  });
+  assert.equal(res.status, 400);
+});
+
+test('rate limits one client hammering the endpoint', async () => {
+  await clear();
+  let limited = 0;
+  for (let i = 0; i < 25; i++) {
+    if ((await say('flood')).status === 429) limited += 1;
+  }
+  assert.ok(limited > 0, 'a single client must not be able to submit without limit');
 });
 
 test('the stream sends a snapshot and is cleaned up on disconnect', async () => {
-  reset();
   const before = subscribers.size;
   const controller = new AbortController();
   const res = await fetch(`${base}/api/stream`, { signal: controller.signal });
@@ -74,27 +90,10 @@ test('the stream sends a snapshot and is cleaned up on disconnect', async () => 
   assert.equal(subscribers.size, before + 1);
 
   controller.abort();
-  // Give the server a tick to notice the socket closed.
   await new Promise((r) => setTimeout(r, 150));
   assert.equal(subscribers.size, before, 'a disconnected client must not be retained');
 });
 
-test('rejects a bad url with 400, not a 500', async () => {
-  const res = await create('not-a-url');
-  assert.equal(res.status, 400);
-  assert.match((await res.json()).error, /valid URL/);
-});
-
-test('rejects a malformed body with 400', async () => {
-  const res = await fetch(`${base}/api/links`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{oh no',
-  });
-  assert.equal(res.status, 400);
-});
-
-test('unknown code returns 404 on both redirect and stats', async () => {
-  assert.equal((await fetch(`${base}/zzzz99`, { redirect: 'manual' })).status, 404);
-  assert.equal((await fetch(`${base}/api/stats/zzzz99`)).status, 404);
+test('unknown paths return 404', async () => {
+  assert.equal((await fetch(`${base}/nope`)).status, 404);
 });

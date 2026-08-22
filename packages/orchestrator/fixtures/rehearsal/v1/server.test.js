@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shorten, resolve, allStats } from './store.js';
+import { submit, snapshot } from './store.js';
 
 test('the store round-trips through the server module', () => {
-  const code = shorten('https://example.com/a');
-  assert.equal(resolve(code), 'https://example.com/a');
+  submit('review');
+  assert.ok(snapshot().total >= 1);
 });
 
-test('allStats returns something for the dashboard to draw', () => {
-  assert.ok(Array.isArray(allStats()));
+test('snapshot gives the page something to render', () => {
+  assert.ok(Array.isArray(snapshot().words));
 });

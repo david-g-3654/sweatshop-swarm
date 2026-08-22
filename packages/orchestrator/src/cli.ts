@@ -29,7 +29,7 @@ function flag(name: string, fallback: string): string {
   return words.length ? words.join(' ') : fallback;
 }
 
-const goal = flag('goal', 'Build and deploy a URL shortener with a real-time analytics dashboard showing clicks per link as a live-updating chart.');
+const goal = flag('goal', 'Build and deploy a live word cloud where anyone can submit a word and it appears sized by how many people said it, updating for everyone in real time.');
 const mode = args.includes('--rehearse') ? 'rehearsal' : 'live';
 const keepAlive = args.includes('--keep-alive');
 
