@@ -290,7 +290,21 @@ export class Orchestrator {
               '',
               `Acceptance criteria:\n${plan.acceptance.map((a) => `- ${a}`).join('\n')}`,
             ].join('\n')
-          : 'The engineers say they have addressed your findings. Here is the workspace as it stands now.';
+          : [
+              'You have reviewed this before. The engineers say they have addressed your',
+              'findings. Here is the workspace as it stands now.',
+              '',
+              'Check whether each finding you raised is actually fixed — including whether',
+              'the fix itself is sound, because a fix can reintroduce the problem it was',
+              'meant to solve, and that is worth blocking for.',
+              '',
+              'Do not go hunting for new problems you did not raise last time. Raise',
+              'something new only if it would break the app or is a security hole. A review',
+              'that finds one more thing on every pass never converges, and the engineers',
+              'cannot act on findings that keep moving.',
+              '',
+              'If the findings you raised are addressed, approve it.',
+            ].join('\n');
 
       const prompt = [
         header,
