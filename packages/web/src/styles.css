@@ -698,23 +698,35 @@ button.control[aria-pressed='true'] {
 
 /* ---- KPI row ---------------------------------------------------------- */
 
+/*
+ * Two tiles as a scoreboard bar rather than two small boxes.
+ *
+ * Content-sized, they used a quarter of the row and looked like they were
+ * floating; stretched with the label stacked above the value, each became a
+ * metre of empty box around a two-character number. Label left, number right,
+ * each filling half the row: the space gets used and it reads as deliberate.
+ */
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: var(--gap);
 }
 
 .tile {
   background: var(--console);
   border: 1px solid var(--rule);
-  padding: 8px 12px 10px;
+  padding: 8px 22px;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  /* Pushed apart, the label and its number sat most of a metre from each other
+     and stopped reading as one thing. Adjacent, "TESTS 37 / 37" is a phrase. */
+  justify-content: flex-start;
+  gap: 1.1rem;
   min-width: 0;
 }
 .tile-label {
   font-family: var(--display);
+  white-space: nowrap;
   font-size: var(--placard);
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -725,8 +737,11 @@ button.control[aria-pressed='true'] {
    numbers that shift width as they change are hard to read at a glance. */
 .tile-value {
   font-family: var(--mono);
-  font-size: 1.55rem;
-  line-height: 1.1;
+  /* Two numbers on the whole row now, so they get to be big enough to read
+     from the back of a room rather than merely present. */
+  font-size: 2.4rem;
+  font-weight: 500;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -734,7 +749,6 @@ button.control[aria-pressed='true'] {
 }
 .tile[data-tone='go'] .tile-value { color: var(--go); }
 .tile[data-tone='nogo'] .tile-value { color: var(--nogo); }
-.tile[data-tone='phosphor'] .tile-value { color: var(--phosphor); }
 
 /* ---- the run as a strip ------------------------------------------------ */
 
