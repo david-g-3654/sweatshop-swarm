@@ -138,3 +138,7 @@ Because the orchestration *is* the project. The model writes code; everything
 that makes six models into a team — routing, review gates, conflict resolution,
 the observability layer — is the thing being built here. A framework would have
 hidden exactly the part worth showing.
+
+## AI tools used
+
+Claude AI (Pro plan) was used for code generation, documentation and debugging.
