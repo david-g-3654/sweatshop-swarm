@@ -1,6 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { LIMITS, FEATURES } from '../config.js';
-import { Sandbox, isAllowedCommand, runCommand } from './sandbox.js';
+import {
+  Sandbox,
+  isAllowedCommand,
+  runCommand,
+  snapshotWorkspace,
+  ALLOWED_BINARIES,
+} from './sandbox.js';
 import { deployTool, httpCheckTool } from './deploy.js';
 
 /**
@@ -112,11 +118,39 @@ const listFiles: ToolImpl = {
   },
 };
 
+/**
+ * What a command did to the workspace, by comparing before and after.
+ *
+ * Without this, run_command was a hole straight through the architecture: it
+ * can create, change and delete files, and it reported none of it. The event
+ * log — the thing every panel, every recording and the whole replay story is
+ * built on — could therefore disagree with the disk, and did. A run once
+ * insisted a module existed while `rm` had removed it.
+ */
+function diffWorkspace(
+  before: Map<string, string>,
+  after: Map<string, string>,
+): FileChange[] {
+  const changes: FileChange[] = [];
+
+  for (const [path, fingerprint] of after) {
+    const previous = before.get(path);
+    if (previous === undefined) changes.push({ path, action: 'created', bytes: size(fingerprint) });
+    else if (previous !== fingerprint) changes.push({ path, action: 'modified', bytes: size(fingerprint) });
+  }
+  for (const path of before.keys()) {
+    if (!after.has(path)) changes.push({ path, action: 'deleted', bytes: 0 });
+  }
+  return changes;
+}
+
+const size = (fingerprint: string) => Number(fingerprint.split(':')[0] ?? 0);
+
 const runCommandTool: ToolImpl = {
   definition: {
     name: 'run_command',
     description:
-      'Run a single shell command in your workspace. No pipes, redirects or chaining. Allowed binaries: node, npm, npx, ls, cat, mkdir, rm, cp, mv, echo, test.',
+      `Run a single shell command in your workspace. No pipes, redirects or chaining. Allowed binaries: ${[...ALLOWED_BINARIES].join(', ')}.`,
     strict: true,
     input_schema: {
       type: 'object',
@@ -133,7 +167,11 @@ const runCommandTool: ToolImpl = {
       // the agent gets to try again rather than burning a turn on confusion.
       return { ok: false, content: `Command refused: ${gate.reason}` };
     }
+    // Bracket the command so whatever it does to the workspace becomes events.
+    const before = await snapshotWorkspace(ctx.sandbox);
     const result = await runCommand(command, ctx.sandbox.root);
+    const fileChanges = diffWorkspace(before, await snapshotWorkspace(ctx.sandbox));
+
     const body = [
       `exit=${result.timedOut ? 'TIMEOUT' : result.code}`,
       result.stdout.trim() && `stdout:\n${result.stdout.trim()}`,
@@ -141,7 +179,11 @@ const runCommandTool: ToolImpl = {
     ]
       .filter(Boolean)
       .join('\n');
-    return { ok: result.ok, content: truncate(body || '(no output)') };
+    return {
+      ok: result.ok,
+      content: truncate(body || '(no output)'),
+      ...(fileChanges.length ? { fileChanges } : {}),
+    };
   },
 };
 

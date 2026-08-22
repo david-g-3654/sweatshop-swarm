@@ -180,6 +180,13 @@ function apply(state: SwarmState, event: SwarmEvent): void {
     }
 
     case 'file.changed': {
+      // A deletion removes the row. Recording it as another kind of change left
+      // the workspace panel listing files that were no longer there, which is
+      // the same lie the event log used to tell about them.
+      if (event.action === 'deleted') {
+        delete state.files[event.path];
+        break;
+      }
       const previous = state.files[event.path];
       state.files[event.path] = {
         path: event.path,

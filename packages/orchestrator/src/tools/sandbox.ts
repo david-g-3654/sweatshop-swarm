@@ -77,6 +77,29 @@ export class Sandbox {
   }
 }
 
+/**
+ * A cheap fingerprint of every file in the workspace.
+ *
+ * Size and mtime rather than a hash: the workspace is a handful of small files,
+ * this runs either side of every command, and a write that leaves both
+ * identical is not a write anyone needs to hear about.
+ */
+export async function snapshotWorkspace(sandbox: Sandbox): Promise<Map<string, string>> {
+  const files = await sandbox.listFiles();
+  const out = new Map<string, string>();
+  await Promise.all(
+    files.map(async (file) => {
+      try {
+        const stat = await fs.stat(sandbox.resolve(file));
+        out.set(file, `${stat.size}:${stat.mtimeMs}`);
+      } catch {
+        // Vanished between listing and stat; the diff will treat it as absent.
+      }
+    }),
+  );
+  return out;
+}
+
 export interface CommandResult {
   ok: boolean;
   code: number | null;
@@ -89,8 +112,17 @@ export interface CommandResult {
 /**
  * Commands agents may run. Anything else is refused with a message telling the
  * agent what it *can* do, which turns a dead end into a recoverable turn.
+ *
+ * rm, mv and cp are deliberately absent. Two engineers work the same directory
+ * at the same time, and one of them reaching for `rm` to tidy up a file it
+ * thinks is wrong destroys work the other owns — which is exactly what happened:
+ * `rm wordcloud.js` three times, and a run that could not ship because the
+ * module its own tests imported was gone.
+ *
+ * Engineers write files. Removing one is not something a teammate gets to do
+ * unilaterally, and write_file already covers replacing content.
  */
-const ALLOWED_BINARIES = new Set(['node', 'npm', 'npx', 'ls', 'cat', 'mkdir', 'rm', 'cp', 'mv', 'echo', 'test']);
+export const ALLOWED_BINARIES = new Set(['node', 'npm', 'npx', 'ls', 'cat', 'mkdir', 'echo', 'test']);
 
 export function isAllowedCommand(command: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = command.trim();
@@ -107,9 +139,6 @@ export function isAllowedCommand(command: string): { ok: true } | { ok: false; r
       ok: false,
       reason: `"${binary}" is not on the allowlist. Allowed: ${[...ALLOWED_BINARIES].join(', ')}`,
     };
-  }
-  if (binary === 'rm' && /\s-[a-z]*r[a-z]*f|\s\/(?:\s|$)/.test(trimmed)) {
-    return { ok: false, reason: 'recursive force delete is not allowed' };
   }
   return { ok: true };
 }

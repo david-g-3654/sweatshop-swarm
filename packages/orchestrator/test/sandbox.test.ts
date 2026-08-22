@@ -35,3 +35,20 @@ test('refuses chaining, redirects and unknown binaries', () => {
   assert.equal(isAllowedCommand('curl example.com').ok, false);
   assert.equal(isAllowedCommand('rm -rf .').ok, false);
 });
+
+test('destructive commands are no longer available to agents', () => {
+  // Two engineers share one directory. One of them running `rm` on a file the
+  // other owns is how a run ended up shipping nothing: the module its own tests
+  // imported had been deleted out from under them.
+  assert.equal(isAllowedCommand('rm wordcloud.js').ok, false);
+  assert.equal(isAllowedCommand('rm -rf .').ok, false);
+  assert.equal(isAllowedCommand('mv a.js b.js').ok, false);
+  assert.equal(isAllowedCommand('cp a.js b.js').ok, false);
+});
+
+test('the commands engineers actually need still work', () => {
+  assert.equal(isAllowedCommand('node --test').ok, true);
+  assert.equal(isAllowedCommand('ls').ok, true);
+  assert.equal(isAllowedCommand('cat server.js').ok, true);
+  assert.equal(isAllowedCommand('mkdir public').ok, true);
+});
