@@ -20,3 +20,6 @@ build/
 # answers to the questions judges ask. Useful to me, not something to hand to
 # anyone reading the repo before the event.
 docs/runbook.md
+
+# editor / agent tooling
+.claude/
