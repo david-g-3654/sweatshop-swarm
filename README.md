@@ -23,7 +23,7 @@ One real live run, on the goal above:
 
 | Duration | Outcome | Tests | Cost |
 |---|---|---|---|
-| 9.5 min | rejected on round 1, fixed, approved on round 2 | 37 passing | $1.35, 83% of input from cache |
+| 5.5 min | rejected on round 1, fixed, approved on round 2 | 25 passing | $0.64 |
 
 `sample-live-run` and `sample-failed-run` ship in `runs/`, so a fresh clone can
 replay a real run and a real failure without an API key.
@@ -37,9 +37,9 @@ it.** First drafts genuinely miss things and the Reviewer genuinely finds them.
 Nothing forces a rejection. If an Engineer nails it first time, it's approved
 and the demo is shorter.
 
-Its unprompted finding on that run: `checkRate` kept a record of every client id
-that had ever made a request — so the rate limiter protecting the app was itself
-an unbounded memory leak.
+Its unprompted finding on that run: the page had one route to its data, a live
+stream — so any proxy that buffers streams would leave the cloud empty for ever
+while submissions quietly succeeded.
 
 ![The GO/NO-GO band showing the reviewer's rejection in full](docs/mission-control.png)
 
