@@ -127,7 +127,6 @@ sandbox/                where the agents actually work (gitignored)
 ```
 
 - [Architecture](docs/architecture.md) — the event schema, the loop, why it's shaped this way
-- [Booth runbook](docs/runbook.md) — what to say, and what to do when it breaks
 
 ## Why hand-rolled orchestration
 

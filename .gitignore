@@ -15,3 +15,8 @@ build/
 # filename has to stay equal to the runId inside it — that is how the loader
 # finds it on disk.
 !/runs/sample-*.json
+
+# The booth runbook stays local: it is the pitch script, the timings and the
+# answers to the questions judges ask. Useful to me, not something to hand to
+# anyone reading the repo before the event.
+docs/runbook.md
