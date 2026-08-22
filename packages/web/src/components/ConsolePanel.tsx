@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ROSTER } from '@swarm/shared';
+import { roleStyle } from '../role';
+import { StatusBadge } from './StatusBadge';
 import type { SwarmState } from '../store';
 
 /**
@@ -37,8 +39,12 @@ export function ConsolePanel({ state }: { state: SwarmState }) {
   return (
     <section className="bay">
       <header>
-        <span className="placard">Console</span>
-        <span className="placard">{pinned ? 'pinned' : 'following'}</span>
+        <span className="placard" style={roleStyle(selected)}>
+          <span className="console-dot" /> {agent?.label ?? 'Console'}
+        </span>
+        <span className="placard">
+          {agent ? <StatusBadge status={agent.status} /> : null} {pinned ? 'pinned' : 'following'}
+        </span>
       </header>
 
       <div className="tabs" role="tablist" aria-label="Agent consoles">
@@ -48,8 +54,9 @@ export function ConsolePanel({ state }: { state: SwarmState }) {
           return (
             <button
               key={spec.agentId}
-              className="tab"
+              className="tab tab-role"
               role="tab"
+              style={roleStyle(spec.agentId)}
               aria-selected={selected === spec.agentId}
               onClick={() => setPinned(pinned === spec.agentId ? null : spec.agentId)}
             >
@@ -60,7 +67,7 @@ export function ConsolePanel({ state }: { state: SwarmState }) {
         })}
       </div>
 
-      <div className="body transcript" ref={body}>
+      <div className="body transcript" ref={body} style={roleStyle(selected)}>
         {!agent || (agent.messages.length === 0 && !agent.stream) ? (
           <p className="empty">{agent?.label ?? 'This station'} has not said anything yet.</p>
         ) : (

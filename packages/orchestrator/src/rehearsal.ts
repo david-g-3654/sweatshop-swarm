@@ -9,6 +9,7 @@ import { Sandbox } from './tools/index.js';
 import { executeToolWithEvents } from './tools/execute.js';
 import { teardown, prewarmTunnel } from './tools/deploy.js';
 import { specs } from './roles.js';
+import { settleAgents } from './settle.js';
 
 /**
  * Rehearsal mode.
@@ -162,6 +163,9 @@ export class Rehearsal {
     const contents = await fs.readFile(path.join(FIXTURES, version, file), 'utf8');
     this.bus.emit({ type: 'agent.status', agentId, status: 'tool', detail: 'write_file' });
     await executeToolWithEvents(this.bus, agentId, this.sandbox, 'write_file', { path: file, contents }, randomUUID());
+    // Back to idle, or the agent sits there claiming to be writing a file for
+    // the rest of the run — and on a booth loop, for the rest of the day.
+    this.bus.emit({ type: 'agent.status', agentId, status: 'idle' });
     await this.pause(220);
   }
 
@@ -291,6 +295,7 @@ export class Rehearsal {
   }
 
   private finish(ok: boolean, deployUrl?: string): { ok: boolean; runId: string; deployUrl?: string } {
+    settleAgents(this.bus, ok);
     this.phase(ok ? 'done' : 'failed');
     this.bus.emit({
       type: 'run.finished',

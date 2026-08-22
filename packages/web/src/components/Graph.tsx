@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { ReactFlow, Background, BackgroundVariant, type Edge, type Node } from '@xyflow/react';
 import { ROSTER } from '@swarm/shared';
+import { roleAccent } from '../role';
 import { StationNode } from './StationNode';
 import type { SwarmState } from '../store';
 
@@ -70,6 +71,11 @@ export function Graph({ state }: { state: SwarmState }) {
         // React Flow puts className on the edge group; data-* attributes are
         // not forwarded, so the styling hook has to be a class.
         className: `edge-${handoff.kind}${hot ? ' edge-hot' : ''}`,
+        // The sender's hue, so you can see who is talking without reading the
+        // label. Rejection keeps red: that one is about meaning, not identity.
+        ...(handoff.kind === 'reject' || handoff.kind === 'approve'
+          ? {}
+          : { style: { stroke: roleAccent(handoff.from) } }),
         labelStyle: { fill: '#e9eef8', fontSize: 11, fontFamily: 'IBM Plex Mono, monospace' },
         labelBgStyle: { fill: '#0e131c' },
         labelBgPadding: [6, 3] as [number, number],

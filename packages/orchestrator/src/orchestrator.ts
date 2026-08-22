@@ -11,6 +11,7 @@ import { executeToolWithEvents } from './tools/execute.js';
 import { PORTS } from './config.js';
 import { specs, parsePlan, verdictOf, suiteOf, shippedUrl, type Plan } from './roles.js';
 import { UsageMeter } from './usage.js';
+import { settleAgents } from './settle.js';
 
 export interface RunOptions {
   goal: string;
@@ -124,6 +125,7 @@ export class Orchestrator {
   }
 
   private finish(ok: boolean, summary: string, deployUrl?: string): RunOutcome {
+    settleAgents(this.bus, ok);
     // Report the bill even on a failed run — a run that burned budget and shipped
     // nothing is exactly the one you want the number for.
     this.bus.drama(ok ? 'info' : 'warn', this.meter.summary());

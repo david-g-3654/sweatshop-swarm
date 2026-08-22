@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { SwarmState } from '../store';
 import { met } from '../time';
+import { roleStyle } from '../role';
 
 const MARK = { info: '·', good: '✓', warn: '!', bad: '✗' } as const;
 
@@ -29,7 +30,13 @@ export function FlightLoop({ state }: { state: SwarmState }) {
           <p className="empty">Quiet. Start a run and the team's traffic shows up here.</p>
         )}
         {state.drama.map((line) => (
-          <div className="loop-line" data-level={line.level} key={line.seq}>
+          <div
+            className="loop-line"
+            data-level={line.level}
+            data-has-role={Boolean(line.agentId)}
+            style={roleStyle(line.agentId)}
+            key={line.seq}
+          >
             <time>{met(state.startedAt, line.at)}</time>
             <span className="mark">{MARK[line.level]}</span>
             <span className="text">{line.text}</span>
