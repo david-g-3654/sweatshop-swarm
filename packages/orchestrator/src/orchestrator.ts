@@ -404,10 +404,23 @@ export class Orchestrator {
   }
 }
 
-/** Pull the first numbered finding out of a review, for the drama feed. */
+/**
+ * Pull the first numbered finding out of a review, for the drama feed.
+ *
+ * Cut at a word boundary. This line lands in the middle of the GO/NO-GO band
+ * at the moment a room is reading it, and "…ever made a request get" reads as
+ * a bug rather than as a summary.
+ */
 function firstFinding(review: string): string {
   const numbered = /^\s*1[.)]\s*(.+)$/m.exec(review);
-  if (numbered?.[1]) return numbered[1].trim().slice(0, 140);
-  const firstLine = review.split('\n').find((l) => l.trim().length > 20);
-  return (firstLine ?? 'changes requested').trim().slice(0, 140);
+  const raw =
+    numbered?.[1] ?? review.split('\n').find((l) => l.trim().length > 20) ?? 'changes requested';
+  return clip(raw.trim(), 150);
+}
+
+function clip(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[,;:—-]$/, '')}…`;
 }

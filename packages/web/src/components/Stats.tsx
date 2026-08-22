@@ -31,7 +31,10 @@ export function Stats({ state }: { state: SwarmState }) {
         {...(tests ? { tone: tests.ok ? ('go' as const) : ('nogo' as const) } : {})}
       />
       <Tile label="Files" value={String(Object.keys(state.files).length)} />
-      <Tile label="Events" value={String(state.drama.length)} />
+      {/* Not "Events": the scrubber counts events too, and it reports a number
+          two orders of magnitude larger. One word, two numbers, ten centimetres
+          apart is a question you get asked all day. */}
+      <Tile label="Log" value={String(state.drama.length)} />
       <Tile
         label="Shipped"
         value={state.deployUrl ? 'yes' : state.finished ? 'no' : '—'}

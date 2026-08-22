@@ -2,15 +2,21 @@
 
 **Watch a software team ship a feature live.**
 
-Give it a goal — *"build and deploy a working URL shortener with click
-analytics"* — and six agents go to work in front of you. A Planner decomposes
-it. Two Engineers write code in parallel. A Reviewer reads what they wrote and
-sends it back. The Engineers fix it. A Tester runs the suite. A Deployer ships
-it.
+Give it a goal — *"build and deploy a live word cloud where anyone can submit a
+word and it appears sized by how many people said it"* — and six agents go to
+work in front of you. A Planner decomposes it. Two Engineers write code in
+parallel. A Reviewer reads what they wrote and sends it back. The Engineers fix
+it. A Tester runs the suite. A Deployer ships it.
 
-At the end there is a URL. You click it. It works.
+At the end there is a URL and a QR code beside it. The room scans it, types a
+word, and watches the cloud reshape itself.
 
 The graph isn't decoration — it's the product. This is agentic AI made legible.
+
+![Mission control during a live run: six agents on a graph, the flight loop on the right, the run's shape along the bottom](docs/the-team.png)
+
+*A real live run, paused just after the Reviewer sent the work back. Both
+Engineers are mid-fix; the red edges are the rejection travelling back to them.*
 
 ---
 
@@ -55,6 +61,10 @@ suite itself and watching **29 of 29 tests pass**:
 A green suite, a real type-coercion bug, and a reviewer that blocked the merge
 anyway. Nobody scripted that.
 
+![The GO/NO-GO band showing the reviewer's rejection in full](docs/mission-control.png)
+
+*The same moment, as the room sees it.*
+
 The current goal invites a sharper one. A word cloud renders text that strangers
 typed, to everyone else watching — so the rubric now blocks any path from a
 submission to markup, and a first draft that concatenates words into `innerHTML`
@@ -66,11 +76,18 @@ A full live run, end to end, against OpenRouter:
 
 | | |
 |---|---|
-| Duration | **5.9 min** — 55s planning, 1m56s building, 2m47s review, 5s tests, 13s deploy |
+| Duration | **9.5 min** on the word cloud goal — a bigger build than the shortener it replaced |
 | Outcome | Rejected on round 1, fixed, approved on round 2 |
-| Tests | Went red mid-run (13 passed / 3 failed), ended **30 passing** |
-| Deploy | Health check returned `200 {"ok":true}` |
-| Events | 530 |
+| Tests | **37 passing** |
+| Cost | **$1.35** — 928k in, 71k out, 770k (83%) served from cache |
+| Events | 762 |
+
+The Reviewer's round-one finding, unprompted: `checkRate`/`createState` kept a
+record of every client id that had ever made a request, so the rate limiter it
+was protecting the app with was itself an unbounded memory leak.
+
+Both `sample-live-run` and `sample-failed-run` ship in `runs/`, so a fresh clone
+can replay a real run and a real failure without an API key.
 
 Review is the longest phase, which is the right shape for the thing being
 demonstrated.

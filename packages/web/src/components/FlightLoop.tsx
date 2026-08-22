@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { SwarmState } from '../store';
 import { met } from '../time';
-import { roleStyle } from '../role';
+import { roleStyle, plain } from '../role';
 
 const MARK = { info: '·', good: '✓', warn: '!', bad: '✗' } as const;
 
@@ -39,7 +39,7 @@ export function FlightLoop({ state }: { state: SwarmState }) {
           >
             <time>{met(state.startedAt, line.at)}</time>
             <span className="mark">{MARK[line.level]}</span>
-            <span className="text">{line.text}</span>
+            <span className="text">{plain(line.text)}</span>
           </div>
         ))}
         <div ref={bottom} />

@@ -43,3 +43,20 @@ export const STATUS: Record<AgentStatus, StatusLook> = {
   done: { label: 'complete', glyph: '✓', tone: 'good' },
   failed: { label: 'failed', glyph: '✕', tone: 'bad' },
 };
+
+/**
+ * Strip the markdown a model puts around its prose.
+ *
+ * Reviewers write findings with **bold** and `code`, which is right in a review
+ * and wrong on a projector — the asterisks and backticks render literally and
+ * the most important sentence in the demo looks broken. This is display-only;
+ * the stored event keeps the original text.
+ */
+export function plain(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/(^|\s)_(.+?)_(?=\s|$)/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

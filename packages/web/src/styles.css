@@ -279,7 +279,7 @@ body {
 }
 
 .station-model {
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   color: var(--dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -291,11 +291,16 @@ body {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 2px 7px 2px 5px;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 4px 10px 4px 8px;
   border: 1px solid currentColor;
-  font-size: 0.8rem;
+  /* What an agent is doing right now is the second most important thing on the
+     node after who it is, so it outranks the model string and the counters. It
+     was previously the smallest text there, which is exactly backwards at
+     fifteen metres. */
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -347,7 +352,7 @@ body {
   border-top: 1px solid var(--rule);
   display: flex;
   justify-content: space-between;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--dim);
   font-variant-numeric: tabular-nums;
 }
