@@ -6,7 +6,7 @@ import { randomUUID as uuid } from 'node:crypto';
 import { EventBus } from './bus.js';
 import { Agent, isFatalConfig, describeError } from './agent.js';
 import { Sandbox } from './tools/index.js';
-import { teardown, prewarmTunnel } from './tools/deploy.js';
+import { prewarmTunnel } from './tools/deploy.js';
 import { executeToolWithEvents } from './tools/execute.js';
 import { PORTS } from './config.js';
 import { specs, parsePlan, verdictOf, suiteOf, shippedUrl, type Plan } from './roles.js';
@@ -86,7 +86,15 @@ export class Orchestrator {
 
   async run(): Promise<RunOutcome> {
     const { goal } = this.options;
-    await teardown();
+    /*
+     * Deliberately not tearing down here.
+     *
+     * Killing the previous deployment at the start of a run leaves the booth
+     * with a dead app for the whole run — visitors get a connection error while
+     * the agents work, which is most of the time. deploy() replaces the process
+     * when it has something to replace it with, and leaves it alone entirely
+     * when the new build is byte-identical.
+     */
     await this.sandbox.init();
 
     this.bus.emit({ type: 'run.started', goal, schemaVersion: 1, mode: 'live' });

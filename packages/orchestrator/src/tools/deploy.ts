@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { DEPLOY_TARGET, PORTS } from '../config.js';
@@ -22,6 +23,32 @@ interface Deployment {
   tunnel?: ChildProcess;
   url: string;
   port: number;
+  /** Content hash of the workspace this process is running. */
+  fingerprint: string;
+}
+
+/**
+ * A content hash of everything in the workspace.
+ *
+ * The sandbox directory is named after the run, so every run looks like new
+ * code even when it is byte-identical — which it is, every single cycle, in
+ * rehearsal. Hashing the contents instead of trusting the path is what lets a
+ * booth loop leave a working app alone.
+ */
+async function fingerprintWorkspace(sandbox: { listFiles(): Promise<string[]>; readFile(p: string): Promise<string> }) {
+  const files = (await sandbox.listFiles()).sort();
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(file);
+    hash.update('\0');
+    try {
+      hash.update(await sandbox.readFile(file));
+    } catch {
+      hash.update('<unreadable>');
+    }
+    hash.update('\0');
+  }
+  return hash.digest('hex');
 }
 
 let current: Deployment | null = null;
@@ -278,6 +305,27 @@ export const deployTool: ToolImpl = {
     const entry = String(input.entry);
     ctx.sandbox.resolve(entry); // throws if the entrypoint escapes the workspace
 
+    /*
+     * If the running app is the same code and still healthy, leave it alone.
+     *
+     * The booth loop rehearses the same build every couple of minutes. Killing
+     * and respawning the app each cycle wipes whatever is in its memory — which
+     * for a word cloud means the words the room typed disappear, seconds after
+     * someone was told "Added". Restarting a process to arrive at a byte-for-byte
+     * identical process is not worth that.
+     */
+    const fingerprint = await fingerprintWorkspace(ctx.sandbox);
+    if (current && current.fingerprint === fingerprint && current.port === PORTS.app) {
+      const alive = await probe(`http://localhost:${PORTS.app}`, 2500);
+      if (alive.ok) {
+        return {
+          ok: true,
+          content: `Already deployed and healthy on identical code — left running so its state survives.\nURL: ${current.url}`,
+          deploy: { ok: true, url: current.url, target: DEPLOY_TARGET },
+        };
+      }
+    }
+
     // The tunnel survives; only the app process is replaced. Joining the
     // pre-warm rather than inspecting `prewarmed` is what stops deploy racing
     // it and opening a rival tunnel.
@@ -311,19 +359,19 @@ export const deployTool: ToolImpl = {
 
     if (DEPLOY_TARGET === 'tunnel') {
       if (tunnelUrl && prewarmed) {
-        current = { app, tunnel: prewarmed.proc, url: tunnelUrl, port };
+        current = { app, tunnel: prewarmed.proc, url: tunnelUrl, port, fingerprint };
         url = tunnelUrl;
         note = 'Served locally and exposed publicly through a cloudflared quick tunnel.';
       } else {
-        current = { app, url: localUrl, port };
+        current = { app, url: localUrl, port, fingerprint };
         note =
           'No working tunnel, so this is the local URL only. Nobody outside this machine can open it.';
       }
     } else if (DEPLOY_TARGET === 'fly') {
-      current = { app, url: localUrl, port };
+      current = { app, url: localUrl, port, fingerprint };
       note = 'The fly backend is not implemented; fell back to the local URL.';
     } else {
-      current = { app, url: localUrl, port };
+      current = { app, url: localUrl, port, fingerprint };
     }
 
     /*
@@ -350,7 +398,7 @@ export const deployTool: ToolImpl = {
      */
     if (url !== localUrl && !(await reachesApp(url))) {
       console.warn(`[swarm] ${url} did not answer — falling back to the local URL`);
-      current = { app, url: localUrl, port };
+      current = { app, url: localUrl, port, fingerprint };
       url = localUrl;
       note =
         'The tunnel did not answer, so this is the local URL only. Nobody outside this machine can open it.';

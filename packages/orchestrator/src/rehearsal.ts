@@ -7,7 +7,7 @@ import { REPO_ROOT, SANDBOX_ROOT, REHEARSAL_SPEED, PORTS } from './config.js';
 import { EventBus } from './bus.js';
 import { Sandbox } from './tools/index.js';
 import { executeToolWithEvents } from './tools/execute.js';
-import { teardown, prewarmTunnel } from './tools/deploy.js';
+import { prewarmTunnel } from './tools/deploy.js';
 import { specs } from './roles.js';
 import { settleAgents } from './settle.js';
 
@@ -181,7 +181,15 @@ export class Rehearsal {
   }
 
   async run(): Promise<{ ok: boolean; runId: string; deployUrl?: string }> {
-    await teardown();
+    /*
+     * Deliberately not tearing down here.
+     *
+     * Killing the previous deployment at the start of a run leaves the booth
+     * with a dead app for the whole run — visitors get a connection error while
+     * the agents work, which is most of the time. deploy() replaces the process
+     * when it has something to replace it with, and leaves it alone entirely
+     * when the new build is byte-identical.
+     */
     await this.sandbox.init();
     this.bus.emit({ type: 'run.started', goal: this.goal, schemaVersion: 1, mode: 'rehearsal' });
 

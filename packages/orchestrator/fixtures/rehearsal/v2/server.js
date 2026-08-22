@@ -2,6 +2,9 @@ import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { submit, snapshot, reset } from './store.js';
 
+/** Show plenty, and say so when there is more rather than hiding it. */
+const CLOUD_LIMIT = 150;
+
 const port = process.env.PORT || 4310;
 const MAX_BODY_BYTES = 4096;
 
@@ -25,7 +28,7 @@ function rateLimited(clientId) {
 
 /** Always built fresh, and always after the write it is reporting. */
 function broadcast() {
-  const frame = `data: ${JSON.stringify(snapshot())}\n\n`;
+  const frame = `data: ${JSON.stringify(snapshot(CLOUD_LIMIT))}\n\n`;
   for (const res of subscribers) {
     try {
       res.write(frame);
@@ -62,8 +65,10 @@ h1{font-size:1rem;letter-spacing:.18em;text-transform:uppercase;margin:0 0 .7rem
 .counts{display:flex;gap:2rem;margin:0 0 .6rem}
 .counts b{color:var(--amber);font-size:2.2rem;line-height:1;display:block;font-variant-numeric:tabular-nums}
 .counts span{color:var(--dim);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase}
-#cloud{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:.15em .5em;min-height:9rem;padding:.5rem}
-#cloud span{line-height:1.05;transition:font-size .35s ease,color .35s ease}
+#cloud{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:.35rem;min-height:9rem;padding:.5rem}
+/* Padding in em is relative to the span's OWN font size, so big words get
+   proportionally big breathing room. A container gap cannot do that. */
+#cloud span{line-height:1.05;padding:0 .18em;transition:font-size .35s ease,color .35s ease}
 form{display:flex;gap:.5rem;flex-wrap:wrap}
 input,button{font:inherit;padding:.7rem;background:var(--bg);color:var(--ink);border:1px solid var(--rule)}
 input{flex:1 1 14rem;min-width:0}
@@ -80,6 +85,7 @@ button:active{background:var(--amber);color:var(--bg)}
     <span>Unique<b id="unique">0</b></span>
   </p>
   <div id="cloud"><span class="empty">Nobody has said anything yet.</span></div>
+  <p id="more" class="empty"></p>
 </div>
 
 <div class="card">
@@ -99,6 +105,10 @@ function render(data) {
 
   var cloud = document.getElementById('cloud');
   cloud.textContent = '';
+
+  var hidden = data.unique - data.words.length;
+  document.getElementById('more').textContent =
+    hidden > 0 ? '+ ' + hidden + ' more said once or twice' : '';
 
   if (!data.words.length) {
     var empty = document.createElement('span');
@@ -162,7 +172,7 @@ const server = http.createServer(async (req, res) => {
       'cache-control': 'no-cache',
       connection: 'keep-alive',
     });
-    res.write(`data: ${JSON.stringify(snapshot())}\n\n`);
+    res.write(`data: ${JSON.stringify(snapshot(CLOUD_LIMIT))}\n\n`);
     subscribers.add(res);
     // Without this the set grows for the life of the process.
     const drop = () => subscribers.delete(res);
@@ -193,7 +203,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (url.pathname === '/api/words') return json(res, 200, snapshot());
+  if (url.pathname === '/api/words') return json(res, 200, snapshot(CLOUD_LIMIT));
   if (url.pathname === '/health') return json(res, 200, { ok: true });
 
   if (req.method === 'POST' && url.pathname === '/api/reset') {
