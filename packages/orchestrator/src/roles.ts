@@ -151,7 +151,10 @@ VERDICT: APPROVED
 VERDICT: CHANGES_REQUESTED
 
 If you request changes, the line before the verdict must be a numbered list of
-findings. Each finding: the file, what is wrong, and what must change. Be
+findings, **most serious first** — the first one is the one that gets read out.
+Lead each finding with what goes wrong and who it happens to, then say where it
+is. "Anyone can run code in every viewer's browser" is a finding; "line 41 uses
+innerHTML" is a location. Each finding: the file, what is wrong, and what must change. Be
 concrete enough that the engineer can fix it without asking you a question.
 Address each finding to the engineer who owns the file.
 `.trim();

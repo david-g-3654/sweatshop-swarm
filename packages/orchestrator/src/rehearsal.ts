@@ -75,11 +75,11 @@ const REVIEW_1 = `I have read store.js, server.js and the page it serves. The
 tests are green, and I am blocking this — the first finding is the kind that
 ends up on a screen in front of a room.
 
-1. server.js — the page builds its cloud by concatenating submitted words into
-   an HTML string and assigning it to innerHTML. Every word came from a stranger
-   and is rendered to every other visitor, so this is cross-site scripting on a
-   shared screen. Submitting <img src=x onerror=...> runs script in the browser
-   of everyone watching. Build nodes and set textContent instead.
+1. server.js — the page pastes submitted words into the document as HTML
+   (string concatenation into innerHTML). Every word came from a stranger and
+   is rendered to every other visitor, so one person typing
+   <img src=x onerror=...> runs code in the browser of everyone watching the
+   screen. Build nodes and set textContent instead.
 2. store.js — normalise() only trims and lowercases. Anything at all is a valid
    word: an empty string, a number, an entire HTML document, three kilobytes of
    text. Validate it — non-empty string, length capped, and reduced to letters,
@@ -91,9 +91,12 @@ ends up on a screen in front of a room.
    state is a state, and it is the one every visitor sees first.
 5. store.js — counts and submissions both grow without limit. A booth running
    all day with an open submission endpoint is an unbounded memory leak.
-6. server.js — nothing rate limits submissions. One person with a loop owns the
-   entire cloud, which on a shared screen is a denial of service against the
-   demo itself.
+6. server.js — the rate limiter keys entirely on x-client-id, a header the
+   browser makes up and sends. A script that puts a fresh random id on every
+   request gets a fresh quota every request, so the limit never applies to the
+   only person it was written to stop. Key it on something the client does not
+   choose. (Verified: twenty-five requests under one id, thirteen blocked;
+   twenty-five under rotating ids, none blocked.)
 7. server.js — the POST handler builds its snapshot BEFORE recording the word
    and broadcasts that, so every screen renders the state from before the
    submission that triggered it. The cloud is permanently one word behind.
@@ -125,7 +128,7 @@ the right call for something a room is pointed at.
 Validation covers type, emptiness and length, and rejects input with no letters
 at all. weighted() handles the empty cloud. Both maps are bounded and the store
 says the cloud is full rather than growing for ever. Submissions are rate
-limited per client.
+limited on something the client cannot pick.
 
 The broadcast happens after the write and builds a fresh snapshot, so screens
 cannot sit one word behind. /api/stream drops its subscriber on close and on
@@ -256,7 +259,11 @@ export class Rehearsal {
       await this.pause(180);
     }
     await this.say({ agentId: 'reviewer', text: REVIEW_1 });
-    this.bus.drama('bad', 'Reviewer rejected the PR: submitted words are concatenated into innerHTML — anyone can run script in every viewer\'s browser.', 'reviewer');
+    this.bus.drama(
+      'bad',
+      'Reviewer rejected the PR: the page pastes typed words straight into the document as HTML — one visitor can run code in everyone else\'s browser.',
+      'reviewer',
+    );
     for (const id of ['engineer-a', 'engineer-b']) {
       this.bus.emit({ type: 'message.sent', from: 'reviewer', to: id, kind: 'reject', summary: '11 findings' });
     }

@@ -215,7 +215,17 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/words') {
-    const clientId = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? 'unknown');
+    /*
+     * Key the limit on something the caller does not choose.
+     *
+     * A limiter keyed on a header the browser invents is not a limiter: rotate
+     * the header and the quota resets, so it only ever throttles the honest.
+     * x-forwarded-for is trusted here because the deployment sits behind a
+     * tunnel that sets it; the socket address is the fallback, and neither is
+     * client-selectable in that arrangement.
+     */
+    const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+    const clientId = forwarded || req.socket.remoteAddress || 'unknown';
     if (rateLimited(clientId)) {
       return json(res, 429, { error: 'slow down — too many words too quickly' });
     }

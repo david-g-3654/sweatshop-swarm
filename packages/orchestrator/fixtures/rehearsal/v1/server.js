@@ -6,6 +6,18 @@ const port = process.env.PORT || 4310;
 
 const subscribers = new Set();
 
+const RATE_LIMIT = 12;
+const RATE_WINDOW_MS = 10000;
+const seen = new Map();
+
+function rateLimited(clientId) {
+  const now = Date.now();
+  const hits = (seen.get(clientId) ?? []).filter((at) => now - at < RATE_WINDOW_MS);
+  hits.push(now);
+  seen.set(clientId, hits);
+  return hits.length > RATE_LIMIT;
+}
+
 function broadcast(frame) {
   for (const res of subscribers) {
     res.write(`data: ${JSON.stringify(frame)}\n\n`);
@@ -64,12 +76,14 @@ function render(data) {
   document.getElementById('cloud').innerHTML = html;
 }
 
+var CLIENT_ID = Math.random().toString(36).slice(2);
+
 function send(e) {
   e.preventDefault();
   var input = document.getElementById('w');
   fetch('/api/words', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-client-id': CLIENT_ID },
     body: JSON.stringify({ word: input.value })
   }).then(function (r) { return r.json(); }).then(function (d) {
     document.getElementById('msg').textContent = 'Added "' + d.word + '".';
@@ -97,6 +111,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/words') {
+    if (rateLimited(req.headers['x-client-id'] ?? 'anonymous')) {
+      return json(res, 429, { error: 'slow down' });
+    }
     let body = '';
     for await (const chunk of req) body += chunk;
     const parsed = JSON.parse(body);

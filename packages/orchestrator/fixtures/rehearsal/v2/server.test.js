@@ -89,6 +89,22 @@ test('rate limits one client hammering the endpoint', async () => {
   assert.ok(limited > 0, 'a single client must not be able to submit without limit');
 });
 
+test('rotating a client-supplied header does not buy a fresh quota', async () => {
+  await clear();
+  // The limiter must not key on anything the caller picks. If it does, this
+  // loop sails through and the limit only ever throttles honest users.
+  let limited = 0;
+  for (let i = 0; i < 25; i++) {
+    const res = await fetch(`${base}/api/words`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-client-id': `rotating-${i}` },
+      body: JSON.stringify({ word: 'flood' }),
+    });
+    if (res.status === 429) limited += 1;
+  }
+  assert.ok(limited > 0, 'a rotating client id must not defeat the rate limit');
+});
+
 test('the stream sends a snapshot and is cleaned up on disconnect', async () => {
   const before = subscribers.size;
   const controller = new AbortController();
